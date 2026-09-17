@@ -2,7 +2,7 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   lang: 'zh-CN',
-  title: 'Cherry777',
+  title: '乌鸦张嘴',
   description: '个人笔记与项目展示',
 
   // 部署在 <username>.github.io 根路径下,base 保持 '/'
@@ -84,7 +84,7 @@ export default defineConfig({
 
     footer: {
       message: '用 VitePress 搭建,托管在 GitHub Pages',
-      copyright: 'Copyright © 2026 Cherry777',
+      copyright: 'Copyright © 2026 乌鸦张嘴',
     },
   },
 })
