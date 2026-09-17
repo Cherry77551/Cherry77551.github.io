@@ -1,6 +1,6 @@
-# 2. 类型系统与值/引用类型
+# 1. 类型系统与值/引用类型
 
-C# 是**静态类型**语言,而且类型系统的表达能力相当强:既有值类型/引用类型的两分,又有可空标注、模式匹配、元组、匿名类型。这一篇从内置类型表开始,一路讲到装箱、可空引用类型、`struct` 的语义,最后收在几个日常最容易翻车的转换和相等性问题上。
+C# 是**静态类型**语言,而且类型系统的表达能力相当强。对写 Unity 脚本的人来说,这一篇有两个必须吃透的地基:**值类型 / 引用类型的内存模型**,以及**装箱带来的 GC 压力**——它们直接决定了 `Update()` 里能不能每帧平稳跑下去。其余部分(字面量、转换、`struct`、枚举、元组、NRT)按 Unity 里实际用得到的程度展开。
 
 ## 内置类型完整表格
 
@@ -26,127 +26,40 @@ C# 的关键字类型是 .NET 类型的别名。下面这张表建议记住关�
 | `string` | `System.String` | 不可变 UTF-16 字符串序列,引用类型 | `null` | 引用 |
 | `object` | `System.Object` | 所有类型的基类 | `null` | 引用 |
 
-### `decimal` 还是 `double`
+### `float`、`double`、`decimal` 与 `nint`
 
-这是新手做业务最容易做错的选择。两者的差异不是精度高低,而是**表示方式**:
+Unity 里日常只有 `float`(约 7 位有效数字,`Vector3` 就是 `float`)和偶尔的 `double`(物理高精度、`System.DateTime`)。`decimal` 是十进制浮点,能精确表示 `0.1` 这类小数,但运算慢、占 16 字节,**游戏运行时基本不用**,只在离线算金额/账单时才考虑。`double d = 0.1 + 0.2` 得不到 `0.3`,比较浮点务必留容差(见文末「常见坑」)。
 
-- `double` 是 IEEE 754 二进制浮点。`0.1` 用二进制**无法精确表示**,只能存一个近似值。
-- `decimal` 是十进制浮点(内部按 10 的幂次存储尾数),能精确表示 `0.1`、`0.2` 这类十进制小数。
-
-```csharp
-double d = 0.1 + 0.2;
-Console.WriteLine(d);                  // 输出: 0.30000000000000004
-Console.WriteLine(d == 0.3);           // 输出: False
-
-decimal m = 0.1m + 0.2m;
-Console.WriteLine(m);                  // 输出: 0.3
-Console.WriteLine(m == 0.3m);          // 输出: True
-```
-
-**结论:任何涉及金额、税率、账单、库存数量的计算,一律用 `decimal`。** `double` 留给科学计算、图形、机器学习、几何——这些场景里速度和动态范围比十进制精确更重要。
-
-代价:`decimal` 的运算比 `double` 慢(软件实现,没有 FPU 指令加速),内存占用是两倍。所以不要在循环里拿它做上亿次运算。
-
-### `nint` / `nuint` 是什么
-
-这两个类型从 C# 9 起有了正式关键字(之前只能写 `IntPtr`),代表**本机大小的整数**,宽度等于当前平台的指针宽度。主要用于:
-
-1. 与非托管代码互操作(设备驱动、C API)。
-2. 高性能数学库、`Span` 索引运算。
-3. 需要"和指针一样宽"的计数,避免 32 位溢出。
-
-```csharp
-nint size = IntPtr.Size;
-Console.WriteLine(size);        // 64 位进程输出: 8
-
-// 支持算术运算
-nint a = 10;
-nint b = a * 2;
-Console.WriteLine(b);           // 输出: 20
-```
-
-::: warning
-`nint` 不是 `int`。虽然它支持算术、比较,但 `int` 到 `nint` 的隐式转换只在安全方向存在,反过来需要显式转换。把 `nint` 用在普通业务逻辑里会降低可读性,除非你确实在处理指针宽度。
-:::
+`nint` / `nuint`(本机宽度整数,对应 `IntPtr` / `UIntPtr`)只在与非托管代码互操作、指针运算时出现,Unity 业务代码里用不到——知道表格里那两行即可。
 
 ## 字面量写法
 
-### 整数进制与分隔符
-
 ```csharp
-int dec = 1_000_000;          // 十进制,下划线只是分隔符,不影响值
+int dec = 1_000_000;          // 下划线只是分隔符,不影响值
 int hex = 0xFF;               // 255
 int bin = 0b1010_1010;        // 170
-int oct = 0o777;              // 511
-
 long big = 9_000_000_000L;    // 需要 L 后缀,否则默认 int 会溢出
-uint u = 42U;
-ulong ul = 42UL;
+
+float f = 1.5f;               // 不加 f 会报错: 1.5 默认是 double
+double d = 1.5;               // 默认就是 double
+decimal m = 1.5m;             // m 后缀必须加
 ```
 
-下划线可以放在数字之间任意位置,但不能在开头(那是标识符)、结尾或紧邻小数点。`0x` 后也可以用。
+字符转义常用的有 `'\t'`、`'\n'`、`'\''`、`'\\'`、`'\u0041'`(即 `'A'`)。`char` 是 UTF-16 码元,一个 emoji 往往占两个 `char`(代理对),要按用户感知的字符处理得用 `Rune`(见文末「常见坑」)。
 
-### 浮点后缀
-
-```csharp
-float f = 1.5f;      // 不加 f 会报错: 1.5 默认是 double
-double d = 1.5;      // 默认就是 double
-double d2 = 1.5d;    // d 后缀可选
-decimal m = 1.5m;    // m 后缀必须加
-decimal m2 = 1e10m;  // 科学计数法 + m
-```
-
-### 字符转义
-
-```csharp
-char tab = '\t';
-char newline = '\n';
-char quote = '\'';
-char backslash = '\\';
-char unicode = '\u0041';       // 'A'
-char surrogate = '\uD83D';     // 代理项的高半部分
-char escape = '\e';            // C# 13 新增: ESC 字符,等价于 \u001B
-```
-
-C# 13 加入的 `\e` 简化了 ANSI 转义序列的写法(以前要写 `\u001B` 或 `\x1B`):
-
-```csharp
-Console.WriteLine("\e[31m红色\e[0m");   // 终端里输出红色文字
-```
-
-原始字符串字面量(C# 11)可以完全避免转义,尤其适合 JSON / 正则 / 路径:
+原始字符串字面量(C# 11)适合 JSON / 正则 / 路径,可完全避免转义;结束引号所在行的缩进会从内容中裁掉:
 
 ```csharp
 string json = """
-    {
-        "name": "C#",
-        "path": "C:\\temp"
-    }
+    { "name": "C#", "path": "C:\\temp" }
     """;
-```
-
-`"""` 的缩进规则:结束引号所在行的缩进会被从所有内容行中裁掉。单行原始字符串用 `"""..."""` 即可:
-
-```csharp
-string path = """C:\Users\nobody""";
 ```
 
 ## 转换:隐式、显式、Convert、Parse
 
 ### 隐式转换
 
-不需要写任何东西,编译器保证安全(不会丢信息):
-
-```csharp
-int i = 42;
-long l = i;          // int → long,安全
-double d = i;        // int → double,安全
-decimal m = i;       // int → decimal,安全
-long back = 100;
-int small = (int)back;  // 反过来要显式
-```
-
-数值隐式转换的"安全方向":
+不需要写任何东西,编译器保证安全(不会丢信息)。安全方向大致是:
 
 ```text
 byte → short → int → long ─┬─→ float → double
@@ -154,81 +67,40 @@ byte → short → int → long ─┬─→ float → double
 char → int → ...
 ```
 
+```csharp
+int i = 42;
+long l = i;              // int → long,安全
+double d = i;            // int → double,安全
+int small = (int)100L;   // 反过来要显式
+```
+
 ### 显式转换(强制类型转换)
 
 ```csharp
 double d = 9.99;
-int i = (int)d;           // 截断小数部分,不是四舍五入
-Console.WriteLine(i);     // 输出: 9
+int i = (int)d;             // 截断小数,不是四舍五入 → 9
 
 long big = 3_000_000_000;
-int wrapped = (int)big;   // 溢出,静默回绕
-Console.WriteLine(wrapped); // 输出: -1294967296
+int wrapped = (int)big;     // 溢出,静默回绕 → -1294967296
 ```
 
-::: danger
-在默认的 `unchecked` 上下文中,整数溢出**不会抛异常**,只会回绕。上面的 `-1294967296` 就是 `3_000_000_000` 超出的部分绕回来的结果。业务代码里如果数值来自外部输入或大数运算,一定要用 `checked` 或 `TryParse`,否则可能悄悄产生错误数据。
+::: warning
+默认 `unchecked` 上下文中,整数溢出**不会抛异常**,只会回绕。需要检查时用 `checked` 语句块或 `checked(a + b)`,溢出抛 `OverflowException`;项目级可在 `.csproj` 设 `<CheckForOverflowUnderflow>true</CheckForOverflowUnderflow>`。Unity 里溢出通常来自帧计数、时间累加。
 :::
-
-### `checked` / `unchecked`
-
-```csharp
-try
-{
-    checked
-    {
-        int max = int.MaxValue;
-        int overflow = max + 1;    // 抛 OverflowException
-    }
-}
-catch (OverflowException)
-{
-    Console.WriteLine("捕获到溢出");
-}
-
-unchecked
-{
-    int max = int.MaxValue;
-    Console.WriteLine(max + 1);    // 输出: -2147483648
-}
-```
-
-可以在项目级别默认启用检查:
-
-```xml
-<PropertyGroup>
-  <CheckForOverflowUnderflow>true</CheckForOverflowUnderflow>
-</PropertyGroup>
-```
-
-也可以在表达式级别用 `checked(...)`,而不只是语句块:
-
-```csharp
-int sum = checked(a + b);
-```
 
 ### `Convert` 类
 
-`Convert` 主要处理**类型之间的转换**,尤其是从 `string` 或 `object`,以及数值类型之间的四舍五入(不是截断):
+`Convert` 处理从 `string` / `object` 的转换,按**四舍五入**而非截断转换小数,`null` 变成默认值而不是抛异常:
 
 ```csharp
-int i = Convert.ToInt32(3.9);
-Console.WriteLine(i);            // 输出: 4 (四舍五入,注意和 (int)3.9 不同)
-
-int fromString = Convert.ToInt32("123");
-bool b = Convert.ToBoolean("true");
-string s = Convert.ToString(42);
-
-// null 会转成默认值,而不是抛异常
-int fromNull = Convert.ToInt32(null);
-Console.WriteLine(fromNull);     // 输出: 0
+int i = Convert.ToInt32(3.9);           // 4,注意和 (int)3.9 == 3 不同
+int fromNull = Convert.ToInt32(null);   // 0
 ```
 
 ### `Parse` / `TryParse`
 
 ```csharp
-int n = int.Parse("123");                 // 失败抛 FormatException
-int n2 = int.Parse("1,234", NumberStyles.AllowThousands, CultureInfo.InvariantCulture);
+int n = int.Parse("123");               // 失败抛 FormatException
 
 // 推荐: TryParse 一次完成"判断 + 取值"
 if (int.TryParse("abc", out int value))
@@ -237,28 +109,17 @@ if (int.TryParse("abc", out int value))
 }
 else
 {
-    Console.WriteLine("不是合法整数");     // 输出: 不是合法整数
+    Console.WriteLine("不是合法整数");   // 输出: 不是合法整数
 }
-```
 
-`TryParse` 的模式叫 **Try 模式**,BCL 里到处在用(`Dictionary.TryGetValue`、`DateTime.TryParse`、`Guid.TryParse`)。自定义类型也推荐遵循这个命名和 `out` 参数约定。
-
-```csharp
-// 现代写法: out var 内联声明
+// out var 内联声明
 if (DateTime.TryParse("2026-09-17", out var date))
 {
-    Console.WriteLine(date.Year);         // 输出: 2026
+    Console.WriteLine(date.Year);       // 输出: 2026
 }
 ```
 
-::: tip
-`int.TryParse` 从 .NET 7 起还实现了 `IParsable<T>`,`T.TryParse(s, provider, out result)`。这让泛型代码可以统一调用,不用为每种数值类型写重复的解析逻辑:
-
-```csharp
-static T ParseOr<T>(string s, T fallback) where T : IParsable<T>
-    => T.TryParse(s, CultureInfo.InvariantCulture, out var v) ? v : fallback;
-```
-:::
+`TryParse` 的模式叫 **Try 模式**,BCL 里到处在用(`Dictionary.TryGetValue`、`DateTime.TryParse`、`Guid.TryParse`),自定义类型也推荐遵循这个命名和 `out` 参数约定。
 
 ## 值类型与引用类型
 
@@ -266,22 +127,9 @@ static T ParseOr<T>(string s, T fallback) where T : IParsable<T>
 
 **值类型**的变量直接包含数据本身;**引用类型**的变量存储一个指向堆上对象的引用(类似指针,但被 GC 管理)。
 
-属于值类型的有:
+属于**值类型**:所有数值类型、`bool`、`char`、`enum`、`Nullable<T>`、元组 `(int, string)`(`ValueTuple` 结构体)、`struct` 及其衍生形式(`readonly struct`、`ref struct`、`record struct`)、指针(unsafe)。
 
-- 所有数值类型(`int`、`double`、`decimal`…)、`bool`、`char`
-- `struct` 及其所有衍生形式:`readonly struct`、`ref struct`、`record struct`
-- `enum`(底层就是整数)
-- `Nullable<T>`
-- 元组 `(int, string)`(其实是 `ValueTuple` 结构体)
-- 指针类型(unsafe)
-
-属于引用类型的有:
-
-- `class`、`interface`、`delegate`
-- `string`、`object`、数组(`int[]`、`string[,]` 都是)
-- `record`(class 形式的 record)
-- 匿名类型
-- 装箱后的值类型
+属于**引用类型**:`class`、`interface`、`delegate`、`string`、`object`、数组、`record`(class 形式)、匿名类型,以及**装箱后的值类型**。
 
 ### 赋值行为差异
 
@@ -345,6 +193,10 @@ void Demo()
 "值类型在栈上"这个说法在 90% 的场景下不会造成 bug,但它会误导你对闭包分配、数组访问性能、`async` 状态机开销的判断。记住正确的判断标准:**看它是不是某个堆对象的字段、是不是被捕获、是不是装箱了**。
 :::
 
+::: tip
+Unity 视角:类字段和数组元素是值类型最常"上堆"的地方——`Vector3[]`、`Transform[]` 数组自己在堆上;`Update()` 里被 lambda 捕获的局部 `int` / `Vector3` 也会被提升到堆上的闭包。这些就是 Profiler 里要盯的分配点。
+:::
+
 ## `struct` 完整讲解
 
 ### 什么时候该用 struct
@@ -377,30 +229,25 @@ public readonly struct Point
 }
 ```
 
+::: tip
+Unity 视角:Unity 的序列化系统只认特定类型——`public` 字段、`[SerializeField]` 的普通字段、`enum`,以及标了 `[Serializable]` 的 class/struct。`readonly struct` 的只读自动属性 Inspector 里看不到,想让 struct 出现在 Inspector 里,就用普通可写字段并标 `[Serializable]`。
+:::
+
 ### 构造规则
 
-- struct **不能**声明无参构造函数(历史上不行,C# 10 起可以声明,但必须给所有字段赋值,而且 `default` 依然可以绕过它直接全零)。
-- 不能有字段初始化器(除非 C# 10+ 且该 struct 有显式构造函数)。
-- 每个构造函数**必须**给所有字段赋值,否则编译错误。
+- 每个构造函数**必须**给所有字段赋值,否则编译错误;无参构造函数 C# 10 起可声明,同样要赋值。
+- 不能有字段初始化器(除非 C# 10+ 且有显式构造函数)。
 - struct 不能有析构函数,不能继承(但可以实现接口)。
 
 ```csharp
-// C# 10+ 允许显式无参构造函数
 public struct Version
 {
     public int Major { get; set; }
-
-    public Version()
-    {
-        Major = 1;    // 必须赋初值
-    }
+    public Version() => Major = 1;   // C# 10+,必须赋初值
 }
 
-// 但 default 依然给出全零,不调用上面的构造函数
-var v = default(Version);
-Console.WriteLine(v.Major);      // 输出: 0
-v = new Version();
-Console.WriteLine(v.Major);      // 输出: 1
+Console.WriteLine(default(Version).Major);   // 0,default 绕过构造函数,直接全零
+Console.WriteLine(new Version().Major);      // 1
 ```
 
 ### `default` 初始化全零
@@ -443,19 +290,13 @@ public double Sum(in Point a, in Point b)
 
 ### `ref struct`
 
-`ref struct` 只能存在于栈上,**不能装箱、不能作为字段、不能用在 `async` / 迭代器里、不能是泛型参数**。它存在的目的是让 `Span<T>` 这样的类型有安全的"栈上视图"语义。
+`ref struct` 强制只在栈上,**不能装箱、不能当字段、不能用在 `async` / 迭代器里**。`Span<T>` 就是 `ref struct`,用于零分配的栈上数据视图:
 
 ```csharp
-public ref struct StackOnly
-{
-    public Span<int> Data;
-}
-
-// Span<T> 本身就是 ref struct
 Span<int> span = stackalloc int[3] { 1, 2, 3 };
 ```
 
-好处是零分配、越界检查可被 JIT 消除;限制是它不能逃逸出当前栈帧,所以不能从方法里 `return` 一个 `Span`(除非它指向堆上内存且你清楚生命周期)。
+代价是它不能逃逸出当前栈帧,所以不能从方法里 `return` 一个指向局部内存的 `Span`。
 
 ### `record struct`
 
@@ -472,10 +313,6 @@ Console.WriteLine(b);                            // 输出: Money { Amount = 20,
 
 `readonly record struct` 可以同时获得值语义和不可变性,是定义"小数据载体"的常用写法。
 
-### 不能继承
-
-struct 隐式继承自 `System.ValueType`,而 `ValueType` 继承自 `object`,但你**不能**让一个 struct 继承另一个 struct 或 class,也不能被继承。它只能实现接口。
-
 ### 默认 `Equals` 的性能问题
 
 `ValueType.Equals` 的默认实现是**反射式逐字段比较**——这是个性能陷阱,而且对含引用字段的 struct 会做字段的 `Equals` 调用,可能语义上也不是你要的:
@@ -489,30 +326,26 @@ Console.WriteLine(a.Equals(b));   // True,但内部走反射,慢
 Console.WriteLine(a == b);        // 编译错误!struct 默认不支持 ==
 ```
 
-正确做法:实现 `IEquatable<T>` 并重写 `Equals` / `GetHashCode`
+正确做法:实现 `IEquatable<T>` 并重写 `Equals` / `GetHashCode`(`HashCode.Combine` 组合字段),再补上 `==` / `!=`:
 
 ```csharp
 struct GoodPoint : IEquatable<GoodPoint>
 {
-    public readonly int X;
-    public readonly int Y;
-
+    public readonly int X, Y;
     public GoodPoint(int x, int y) => (X, Y) = (x, y);
 
     public bool Equals(GoodPoint other) => X == other.X && Y == other.Y;
-    public override bool Equals(object? obj) => obj is GoodPoint p && Equals(p);
     public override int GetHashCode() => HashCode.Combine(X, Y);
-
     public static bool operator ==(GoodPoint l, GoodPoint r) => l.Equals(r);
     public static bool operator !=(GoodPoint l, GoodPoint r) => !l.Equals(r);
 }
 ```
 
-实现 `IEquatable<T>` 还有第二个好处:放进 `Dictionary<TKey, TValue>` 或 `HashSet<T>` 时,泛型容器会直接调用强类型 `Equals`,**避免装箱**。
+这还有第二个好处:放进 `Dictionary<TKey, TValue>` / `HashSet<T>` 时,泛型容器直接调用强类型 `Equals`,**避免装箱**。
 
 ## `class` 简述
 
-`class` 是引用类型,支持继承、多态、虚方法、抽象成员、接口实现。这里只给最小示例,细节见第 4 篇。
+`class` 是引用类型,支持继承、多态、虚方法、抽象成员、接口实现。这里只给最小示例,细节见第 3 篇。
 
 ```csharp
 public abstract class Shape
@@ -564,42 +397,11 @@ int g = generic[0];      // 无装箱
 
 ### 性能代价
 
-每次装箱都是一次托管堆分配,会带来 GC 压力和额外的内存(对象头约 16 字节 + 值本身)。在热路径里每帧几千次装箱会显著影响吞吐。
+每次装箱都是一次托管堆分配:对象头约 16 字节 + 值本身,并直接增加 GC 压力。用 `GC.GetAllocatedBytesForCurrentThread()` 能量出差异——循环 `object boxed = i;` 十万次约分配 2.4 MB,而 `sum += i;` 是 0。
 
-```csharp
-long before = GC.GetAllocatedBytesForCurrentThread();
-for (int i = 0; i < 100_000; i++)
-{
-    object boxed = i;             // 每次循环装箱
-}
-long after = GC.GetAllocatedBytesForCurrentThread();
-Console.WriteLine(after - before);   // 输出: 约 2400000 (24 字节 × 10 万)
-```
-
-对比不装箱的版本:
-
-```csharp
-long before = GC.GetAllocatedBytesForCurrentThread();
-int sum = 0;
-for (int i = 0; i < 100_000; i++)
-{
-    sum += i;                     // 无分配
-}
-long after = GC.GetAllocatedBytesForCurrentThread();
-Console.WriteLine(after - before);   // 输出: 0(或很小的固定值)
-```
-
-也可以用 `ReferenceEquals` 直观验证装箱产生了新对象:
-
-```csharp
-int a = 128;
-object box1 = a;
-object box2 = a;
-Console.WriteLine(object.ReferenceEquals(box1, box2));   // 输出: False,两次装箱是两个对象
-
-object box3 = box1;
-Console.WriteLine(object.ReferenceEquals(box1, box3));   // 输出: True,只是复制引用
-```
+::: danger
+Unity 视角:装箱是游戏卡顿最常见的托管分配来源之一。`Update()` / 物理回调里每帧装箱(把值类型塞进 `object`、非泛型集合、`Enum.HasFlag` 的参数、`string.Format` 等),会持续触发 GC,表现为周期性掉帧。热路径优先泛型集合、`IEquatable<T>` 和插值字符串处理器。
+:::
 
 ### 如何避免
 
@@ -651,28 +453,9 @@ var filtered = nums.Where(n => n > 2).ToArray();
 Console.WriteLine(string.Join(",", filtered));    // 输出: 3,5
 ```
 
-### 在 LINQ 中的行为
+### 提升运算符与 LINQ
 
-`Enumerable.Sum`、`Average` 等聚合会**跳过** null 元素,而 `Max` / `Min` 也是:
-
-```csharp
-int?[] nums = { 1, null, 3 };
-Console.WriteLine(nums.Sum());          // 输出: 4
-Console.WriteLine(nums.Average());      // 输出: 2
-Console.WriteLine(nums.Max());          // 输出: 3
-Console.WriteLine(nums.Max() ?? -1);    // 输出: 3
-```
-
-### 提升运算符(lifted operators)
-
-C# 会自动为 `int?` 生成相应版本的 `+`、`-`、`==` 等:任一操作数为 null,结果就是 null。
-
-```csharp
-int? a = 5;
-int? b = null;
-Console.WriteLine(a + b);       // 输出: (空行,即 null)
-Console.WriteLine(a + 1);       // 输出: 6
-```
+C# 会自动为 `int?` 提升 `+`、`-`、`==` 等运算符:任一操作数为 null,结果就是 null(`a + b` 为 null,`a + 1` 为 6)。LINQ 的 `Sum` / `Average` / `Max` 会**跳过** null 元素。注意 `null < 5` 恒为 `false`,所以 `Where(n => n > 2)` 会自然过滤掉 null。
 
 ::: warning
 `int?` 不等于 `int`,不能直接赋给 `int` 参数,必须 `.Value`(可能抛异常)或者 `?? 0`(指定默认值)。最常见的选择是显式给出业务默认值,而不是盲目 `.Value`。
@@ -682,25 +465,13 @@ Console.WriteLine(a + 1);       // 输出: 6
 
 ### 为什么需要它
 
-`null` 是 C# 里最常见的运行时错误来源——.NET Framework 之前所有引用类型都可以是 `null`,编译器完全不提醒。2019 年 .NET Core 3.0 引入 **NRT(Nullable Reference Types)**,让编译器对引用类型的可空性做静态检查。
+`null` 是最常见的运行时错误来源。**NRT(Nullable Reference Types)** 让编译器对引用类型的可空性做静态检查,2019 年随 .NET Core 3.0 引入。
 
-关键点:**NRT 是编译期的静态分析,运行时没有任何行为变化**。`string` 和 `string?` 在 IL 里是同一个类型。它纯粹是给编译器和给读代码的人看的注解。
+关键点:**NRT 是编译期静态分析,运行时没有任何行为变化**——`string` 和 `string?` 在 IL 里是同一个类型。在 `.csproj` 里 `<Nullable>enable</Nullable>` 开启,或在文件内用 `#nullable enable` / `#nullable restore` 局部开关。
 
-```xml
-<PropertyGroup>
-  <Nullable>enable</Nullable>
-</PropertyGroup>
-```
-
-也可以在文件里局部开启:
-
-```csharp
-#nullable enable
-// 这个文件里启用
-#nullable restore
-```
-
-### `?` 标注与告警
+::: tip
+Unity 视角:Unity 默认模板不开 NRT,自己写脚本不必强求;但读第三方库、官方包或较新项目的代码时会大量遇到 `string?`、`!` 和 `[NotNullWhen]`,需要能看懂。下面按"看别人代码够用"的深度介绍。
+:::
 
 ```csharp
 #nullable enable
@@ -712,57 +483,19 @@ Console.WriteLine(notNull.Length);      // OK
 Console.WriteLine(maybeNull.Length);    // CS8602: 解引用可能为 null 的引用
 ```
 
-常见警告码及其含义:
-
-| 警告码 | 触发场景 |
-| --- | --- |
-| CS8600 | 把可能为 null 的值赋给非可空变量 |
-| CS8601 | 可能为 null 的引用赋值 |
-| CS8602 | 解引用可能为 null 的引用 |
-| CS8618 | 不可空字段/属性在构造函数退出时可能为 null |
-| CS8625 | 把 null 字面量传给不可空参数 |
-| CS8629 | Nullable 值类型的 `Value` 可能无效 |
-
-```csharp
-#nullable enable
-
-// CS8618: 构造函数没有初始化 Name
-public class User
-{
-    public string Name { get; set; }
-}
-
-// 变通方式一: 用 required(C# 11)
-public class User2
-{
-    public required string Name { get; set; }
-}
-
-// 变通方式二: 用 ? 明确表示"可能为 null"
-public class User3
-{
-    public string? Name { get; set; }
-}
-
-// 变通方式三: 用 = null! 抑制(仅当你知道外部一定会赋值,比如 DI 或 ORM)
-public class User4
-{
-    public string Name { get; set; } = null!;
-}
-```
+常见警告码:CS8600(把可能为 null 的值赋给非可空变量)、CS8602(解引用可能为 null)、CS8618(构造函数退出时不可空字段可能为 null,常用 `required`、`string?` 或 `= null!` 处理)、CS8625(传 null 给不可空参数)、CS8629(Nullable 的 `Value` 可能无效)。
 
 ### `!` 抑制符
 
-当你比编译器更确定某个值不是 `null` 时,用 `null-forgiving operator` 告诉它闭嘴:
+当你比编译器更确定某个值不是 `null` 时,用 `null-forgiving operator` 让它闭嘴:
 
 ```csharp
 string? config = GetConfig();
-// 你确定这里不为 null,并愿意承担风险
-Console.WriteLine(config!.Length);
+Console.WriteLine(config!.Length);   // 你确定这里不为 null,并承担风险
 ```
 
 ::: danger
-`!` 不会做任何运行时检查,它只是让编译器**不再报警**。如果判断错了,程序照样 `NullReferenceException`。建议只在两种情况下用:(1) 外部框架保证非空(比如 `[NotNull]` 标注的 DI),并且你要在旁边写注释说明原因;(2) 单元测试里构造测试数据。生产逻辑里能重构成显式判空就不要用 `!`。
+`!` 不做任何运行时检查,只是让编译器**不再报警**,判断错了照样 `NullReferenceException`。只在外部框架保证非空(如 DI)并写注释说明原因时使用,生产逻辑能显式判空就别用。
 :::
 
 ### 空条件运算符与空合并
@@ -770,111 +503,38 @@ Console.WriteLine(config!.Length);
 ```csharp
 string? name = null;
 
-// ?. 在 null 时短路,返回 null
-int? length = name?.Length;             // null
-Console.WriteLine(length);              // 输出: (空行)
-
-// ?[] 数组/索引器版本
+int? length = name?.Length;             // ?. 在 null 时短路,返回 null
 int[]? arr = null;
-int? first = arr?[0];
-Console.WriteLine(first);               // 输出: (空行)
+int? first = arr?[0];                   // ?[] 是索引器版本
 
-// ?? 提供默认值
-string display = name ?? "(未命名)";
-Console.WriteLine(display);             // 输出: (未命名)
-
-// ??= 只在左侧为 null 时赋值
+string display = name ?? "(未命名)";    // ?? 提供默认值
 string? cache = null;
-cache ??= "computed";
-Console.WriteLine(cache);               // 输出: computed
-cache ??= "ignored";
-Console.WriteLine(cache);               // 输出: computed
-```
+cache ??= "computed";                   // ??= 只在左侧为 null 时赋值
 
-链式写法可以优雅地处理深层嵌套:
-
-```csharp
-public class Order { public Customer? Buyer { get; set; } }
-public class Customer { public Address? Home { get; set; } }
-public class Address { public string? City { get; set; } }
-
-Order? order = null;
-string city = order?.Buyer?.Home?.City ?? "未知";
-Console.WriteLine(city);                // 输出: 未知
-```
-
-C# 14 引入了**空条件赋值**,可以在 `?.` 左侧直接赋值:
-
-```csharp
-// C# 14: 如果 order?.Buyer 不为 null,则给它的 Home 赋值
-order?.Buyer?.Home = new Address { City = "Beijing" };
-// 等价于
-if (order?.Buyer is not null)
-{
-    order.Buyer.Home = new Address { City = "Beijing" };
-}
+string city = order?.Buyer?.Home?.City ?? "未知";   // 链式处理深层嵌套
 ```
 
 ### 在属性/参数/返回值上标注
 
-```csharp
-public class Repository
-{
-    // 返回值可能为 null
-    public User? Find(int id) => null;
+标注可以更精确:`User? Find(int id)` 表示返回值可能为 null,`void Save(User? user)` 表示参数允许 null。`[NotNullWhen(true)] out User? user` 这类叫**流分析特性**,让编译器知道"返回 true 时 user 一定非 null";同类还有 `[MaybeNullWhen]`、`[NotNull]` / `[MaybeNull]`、`[AllowNull]` / `[DisallowNull]`。
 
-    // 参数允许为 null
-    public void Save(User? user) { }
-
-    // 输出参数在方法返回后一定非 null
-    public bool TryGet(int id, [NotNullWhen(true)] out User? user)
-    {
-        user = null;
-        return false;
-    }
-}
-```
-
-`[NotNullWhen(true)]` 这类特性叫**流分析特性**,常配套:
-
-- `[NotNullWhen(bool)]`
-- `[MaybeNullWhen(bool)]`
-- `[NotNull]` / `[MaybeNull]`
-- `[DisallowNull]` / `[AllowNull]`
-
-### `notnull` 约束
-
-在泛型约束里用 `notnull` 表示"不允许可为 null 的类型实参":
-
-```csharp
-public static T FirstOrDefaultChecked<T>(IEnumerable<T> source, string name)
-    where T : notnull
-{
-    foreach (var item in source) return item;
-    throw new InvalidOperationException($"{name} 为空");
-}
-```
-
-`notnull` 与 `class` 不同:它允许 `int`、`string` 等非可空类型,但不允许 `string?`、`int?`。
+在泛型约束里,`where T : notnull` 表示"不允许可为 null 的类型实参":它接受 `int`、`string`,但不接受 `int?`、`string?`。
 
 ## 类型检查与转换:`is`、`as`、`typeof`、`GetType`
 
 ```csharp
 object obj = "hello";
 
-// is 判断类型,不抛异常
+// is 判断类型,不抛异常;模式可组合属性与条件
 if (obj is string s)
 {
     Console.WriteLine(s.Length);        // 输出: 5
 }
-
-// is 模式可以组合条件
 if (obj is string { Length: > 3 } str)
 {
     Console.WriteLine(str);             // 输出: hello
 }
 
-// 属性模式 + 常量模式
 object value = 42;
 if (value is int n and > 0 and < 100)
 {
@@ -884,43 +544,27 @@ if (value is int n and > 0 and < 100)
 
 ### 为什么 `as` 不抛异常
 
-`as` 在类型不兼容时返回 `null`,而非抛 `InvalidCastException`。代价是**它只能用于引用类型和可空值类型**——因为值类型不可能是 `null`,所以 `int x = someObj as int;` 编译不过,要写成 `someObj as int?`。
+`as` 在类型不兼容时返回 `null`,而非抛 `InvalidCastException`。代价是**它只能用于引用类型和可空值类型**:值类型不可能是 `null`,所以 `someObj as int` 编译不过,要写 `someObj as int?`。
 
 ```csharp
 object obj = "hello";
 string? s = obj as string;             // 成功
 int? i = obj as int?;                  // 失败,返回 null
-Console.WriteLine(s is null);          // 输出: False
-Console.WriteLine(i is null);          // 输出: True
-
-// 对比: 强制转换会抛
-try { _ = (string)obj; }
-catch (InvalidCastException) { }
 ```
 
-选择建议:`as` 用于"我怀疑类型可能不对,想自己处理失败";强制转换用于"类型绝对正确,错了就是要炸"。
+选择建议:`as` 用于"怀疑类型可能不对,想自己处理失败";强制转换用于"类型绝对正确,错了就是要炸"。
 
 ### `typeof` 与 `GetType()`
 
 ```csharp
 Type t1 = typeof(string);          // 编译期就知道的类型
 Type t2 = "hello".GetType();       // 运行时对象的实际类型
-
 Console.WriteLine(t1 == t2);       // 输出: True
-Console.WriteLine(t1.Name);        // 输出: String
-Console.WriteLine(t1.FullName);    // 输出: System.String
 Console.WriteLine(t1.IsValueType); // 输出: False
-Console.WriteLine(typeof(int).IsValueType);  // 输出: True
 ```
 
 ::: warning
-`GetType()` **不是 `virtual`**,不能被重写,所以任何对象返回的都是它的**真实运行时类型**。这和 `Equals`、`ToString` 可以被重写不同。另外 `obj is T` 和 `obj.GetType() == typeof(T)` 语义不同:`is` 会匹配子类,后者只在**完全相等**时成立。
-
-```csharp
-object s = "hello";
-Console.WriteLine(s is object);                    // 输出: True
-Console.WriteLine(s.GetType() == typeof(object));  // 输出: False
-```
+`GetType()` **不是 `virtual`**,不能被重写,任何对象返回的都是它的**真实运行时类型**。另外 `obj is T` 与 `obj.GetType() == typeof(T)` 语义不同:`is` 会匹配子类,后者只在**完全相等**时成立——例如 `"hello".GetType() == typeof(object)` 是 `False`。
 :::
 
 ## 枚举 `enum`
@@ -976,89 +620,46 @@ bool canRead = (perms & Permissions.Read) == Permissions.Read;
 ### 与字符串互转
 
 ```csharp
-// 字符串 → 枚举
-Status s = Enum.Parse<Status>("Active");
-Console.WriteLine(s);                          // 输出: Active
+Status s = Enum.Parse<Status>("Active");                        // 失败抛异常
+bool ok = Enum.TryParse<Status>("nope", out var parsed);        // false
+Console.WriteLine(Status.Deleted.ToString());                  // 输出: Deleted
+Console.WriteLine((int)Status.Deleted);                        // 输出: 99
 
-if (Enum.TryParse<Status>("nope", out var parsed))
-{
-    Console.WriteLine(parsed);
-}
-else
-{
-    Console.WriteLine("解析失败");              // 输出: 解析失败
-}
-
-// 默认 TryParse 对数字字符串也会成功!
-Enum.TryParse<Status>("123", out var num);
-Console.WriteLine(num);                        // 输出: 123,虽然没定义
-
-// 枚举 → 字符串
-Console.WriteLine(Status.Deleted.ToString());  // 输出: Deleted
-Console.WriteLine(((int)Status.Deleted));      // 输出: 99
-
-// 遍历所有值
-foreach (Status v in Enum.GetValues<Status>())
+foreach (Status v in Enum.GetValues<Status>())                  // 遍历所有值
 {
     Console.WriteLine($"{v} = {(int)v}");
 }
 ```
 
 ::: warning
-`Enum.TryParse` 对**任何数字字符串**都会返回 `true`,即使该数字不是已定义的枚举值。它还会忽略大小写并接受逗号组合。所以验证外部输入时,需要额外用 `Enum.IsDefined` 确认:
+`Enum.TryParse` 对**任何数字字符串**都会返回 `true`,即使该数字不是已定义的值(它还会忽略大小写、接受逗号组合)。验证外部输入时还要用 `Enum.IsDefined` 确认:
 
 ```csharp
-if (Enum.TryParse<Status>("123", out var st) && Enum.IsDefined(st))
-{
-    // 才是真正合法的值
-}
+if (Enum.TryParse<Status>("123", out var st) && Enum.IsDefined(st)) { }
 ```
 :::
 
 ## 匿名类型
 
-```csharp
-var person = new { Name = "Alice", Age = 30 };
-Console.WriteLine(person.Name);        // 输出: Alice
-Console.WriteLine(person);             // 输出: { Name = Alice, Age = 30 }
-
-// 属性是只读的
-// person.Age = 31;   // 编译错误
-```
-
-相等性:两个匿名类型如果**属性名、类型、顺序完全一致**,则被认为是同一个类型,且 `Equals` 按值比较。
+`new { ... }` 在编译期生成一个只读的引用类型,属性名、类型、顺序完全一致时视为同一类型,`Equals` 按值比较:
 
 ```csharp
 var a = new { X = 1, Y = 2 };
 var b = new { X = 1, Y = 2 };
-Console.WriteLine(a.Equals(b));        // 输出: True
-Console.WriteLine(a.GetType() == b.GetType());  // 输出: True
+Console.WriteLine(a.Equals(b));                 // 输出: True
+// a.X = 3;                                     // 编译错误: 属性只读
 ```
 
-LINQ 里匿名类型非常实用:
+LINQ 投影里很常用:
 
 ```csharp
-var orders = new[]
-{
-    new { Id = 1, Customer = "A", Total = 100m },
-    new { Id = 2, Customer = "B", Total = 250m },
-};
-
 var summary = orders
     .GroupBy(o => o.Customer)
     .Select(g => new { Customer = g.Key, Sum = g.Sum(o => o.Total) })
     .ToList();
-
-foreach (var row in summary)
-{
-    Console.WriteLine($"{row.Customer}: {row.Sum}");
-}
-// 输出:
-// A: 100
-// B: 250
 ```
 
-局限:不能作为方法返回值(除非返回 `object`,那就要装箱)、不能跨程序集传递、属性不可变、不能添加方法。需要这些能力时改用 `record`。
+局限:不能作为方法返回值(那样要转 `object`,从而装箱)、不能跨程序集、属性不可变、不能加方法。需要这些能力就用 `record`。
 
 ## 元组
 
@@ -1074,41 +675,23 @@ foreach (var row in summary)
 | 推荐 | 是 | 否(历史遗留) |
 
 ```csharp
-var old = Tuple.Create(1, "a");
-Console.WriteLine(old.Item1);          // 输出: 1
-
 var modern = (Id: 1, Name: "a");       // ValueTuple,带命名
 Console.WriteLine(modern.Name);        // 输出: a
 Console.WriteLine(modern.Item2);       // 输出: a,ItemN 依然可用
 ```
 
-### 解构
+### 解构与相等性
 
 ```csharp
-(int id, string name) = GetUser();
-Console.WriteLine($"{id} {name}");
+(int id, string name) = GetUser();     // 解构
+var (first, _) = GetPair();            // 用弃元忽略不关心的值
 
-// 用弃元忽略不关心的值
-var (first, _) = GetPair();
-
-// 交换变量
 int x = 1, y = 2;
-(x, y) = (y, x);
-Console.WriteLine($"{x} {y}");          // 输出: 2 1
-```
+(x, y) = (y, x);                       // 交换,不需要临时变量
 
-### 元组相等性
-
-```csharp
 var t1 = (1, "a");
 var t2 = (1, "a");
-Console.WriteLine(t1 == t2);            // 输出: True
-Console.WriteLine(t1.Equals(t2));       // 输出: True
-
-// 注意: 嵌套元组也是按值比较
-var n1 = ((1, 2), 3);
-var n2 = ((1, 2), 3);
-Console.WriteLine(n1 == n2);            // 输出: True
+Console.WriteLine(t1 == t2);           // 输出: True,ValueTuple 按值比较
 ```
 
 ### 用元组返回多值
@@ -1128,11 +711,7 @@ if (!ok)
 }
 ```
 
-超过 3 个返回值时,元组的可读性会下降,这时考虑定义一个 `record`。
-
-::: tip
-元组作为方法返回多值,比 `out` 参数更清晰,而且不影响异步方法(`async Task<(int, string)>` 完全可用)。唯一的坑是元组的 `==` 在**包含 `null` 的可空引用**上依然按值比较,但比较的是引用;要小心 `(null, 1) == (null, 1)` 是 `True` 还是 `False` —— 实际返回 `True`,因为都走 `EqualityComparer<T>.Default`。
-:::
+超过 3 个返回值时,元组的可读性会下降,这时考虑定义一个 `record`。元组返回多值比 `out` 参数更清晰,也能用于异步方法(`async Task<(int, string)>`)。
 
 ## `var` 与显式类型
 
@@ -1145,57 +724,31 @@ var name = "x";                      // string
 var tuple = (1, "a");                // (int, string)
 ```
 
-什么时候用 `var` 更合适:
-
-- 右侧类型显而易见的场合:`var users = new List<User>();`
-- 匿名类型**必须**用 `var`(没有类型名可写)。
-- LINQ 链式结果,写全名极其冗长。
-- 泛型类型嵌套很深时。
-
-什么时候**不要**用:
-
-- 右侧看不出类型:`var x = Get();` 应该写成 `User x = Get();`。
-- 数值字面量:`var total = 0;` 掩盖了它应该是 `decimal` 还是 `int`,金额场景尤其危险。
+适合用:右侧类型显而易见(`var users = new List<User>();`)、匿名类型(**必须**用)、LINQ 链式结果、泛型嵌套很深时。
+**不要**用:右侧看不出类型(`var x = Get();` 应写成 `User x = Get();`)、数值字面量(`var total = 0;` 掩盖了它该是 `decimal` 还是 `int`)。
 
 ```csharp
-// 危险: total 被推断为 int,后面 += 0.1m 会编译错误
-var total = 0;
-
-// 清楚
-decimal total2 = 0m;
+var total = 0;          // 危险: 推断为 int,后面 += 0.1m 会编译错误
+decimal total2 = 0m;    // 清楚
 ```
 
-团队约定上,很多代码库用 `.editorconfig` 强制某些场景必须显式类型:
-
-```text
-csharp_style_var_for_built_in_types = false:suggestion
-csharp_style_var_when_type_is_apparent = true:suggestion
-csharp_style_var_elsewhere = false:suggestion
-```
+团队约定常用 `.editorconfig` 的 `csharp_style_var_*` 规则约束。
 
 ## 类型别名
 
-`using` 别名在文件顶部声明,作用域是整个文件:
+`using` 别名在文件顶部声明,作用域是整个文件;C# 12 起还能指向元组、数组、`nullable` 等任意类型:
 
 ```csharp
 using IntPair = (int X, int Y);
 using Matrix = double[][];
-using Handler = System.Func<string, System.Threading.Tasks.Task<int>>;
 using CustomerId = System.Guid;
+using MaybeInt = int?;
 
 CustomerId id = Guid.NewGuid();
-Matrix m = [[1.0, 2.0], [3.0, 4.0]];
-```
-
-C# 12 起别名可以指向**任意类型**,包括前面提到的元组、数组、nullable:
-
-```csharp
-using MaybeInt = int?;
-using Json = System.Text.Json.JsonSerializer;
 ```
 
 ::: warning
-`using` 别名是**编译器特性**,不会创建一个新类型。所以 `CustomerId` 和 `Guid` 完全等价,不能借此实现类型安全包装(那是 `record struct CustomerId(Guid Value)` 干的事)。别名只在当前文件有效,别的文件看不到。
+别名是**编译器特性**,不会创建新类型:`CustomerId` 和 `Guid` 完全等价,做不到类型安全包装(那要用 `record struct CustomerId(Guid Value)`)。别名只在当前文件有效。
 :::
 
 ## `default` 值表
@@ -1237,17 +790,7 @@ Console.WriteLine(Math.Abs(a - b) < 1e-10);         // 输出: True
 ```
 
 **2. `decimal` 除法丢精度。**
-`decimal` 能精确表示十进制小数,但**除法可能产生无限小数**,会被截断到 28 位:
-
-```csharp
-decimal a = 1m / 3m;
-Console.WriteLine(a);                   // 输出: 0.3333333333333333333333333333
-Console.WriteLine(a * 3m);              // 输出: 0.9999999999999999999999999999
-
-// 金额计算应该显式舍入
-decimal price = 10m / 3m;
-Console.WriteLine(decimal.Round(price, 2, MidpointRounding.ToEven));   // 输出: 3.33
-```
+`decimal` 能精确表示十进制小数,但除法可能产生无限小数,会被截断到 28 位;金额计算要显式 `decimal.Round(price, 2, MidpointRounding.ToEven)`。
 
 **3. `int` 除法截断。**
 `int / int` 结果还是 `int`,小数部分直接丢掉:
@@ -1262,69 +805,27 @@ Console.WriteLine(5 % 2);               // 输出: 1
 计算百分比时尤其要注意:`done / total * 100` 如果两个都是 `int`,结果几乎永远是 0 或 100。
 
 **4. 数值与字符串互转的文化差异。**
-`"1,234.5"` 在 en-US 下能解析,在 de-DE 下 `.` 是千分位`,` 是小数点,结果完全不同。
-
-```csharp
-using System.Globalization;
-
-string s = "1,234.5";
-Console.WriteLine(double.Parse(s, CultureInfo.InvariantCulture));   // 输出: 1234.5
-
-// 解析外部数据、配置文件、网络协议时,一律用 InvariantCulture
-// 只在面向最终用户显示/输入时用 CurrentCulture
-Console.WriteLine(1234.5.ToString("N2", CultureInfo.InvariantCulture));  // 输出: 1,234.50
-```
+`"1,234.5"` 在 en-US 下能解析,在 de-DE 下 `.` 是千分位、`,` 是小数点,结果完全不同。
 
 ::: danger
-`double.Parse(s)` 和 `Convert.ToDouble(s)` 默认使用 `CurrentCulture`。服务器上的区域设置可能是任何值,同一份输入在不同机器上解析结果不同,这是非常隐蔽的生产事故来源。**解析机器可读数据,永远传 `CultureInfo.InvariantCulture`。**
-
-```csharp
-// 正确
-decimal amount = decimal.Parse(raw, CultureInfo.InvariantCulture);
-// 错误(取决于服务器区域)
-decimal wrong = decimal.Parse(raw);
-```
+`double.Parse(s)` / `Convert.ToDouble(s)` 默认用 `CurrentCulture`,同一份输入在不同机器上可能解析出不同结果。**解析机器可读数据(存档、配置、网络协议)永远传 `CultureInfo.InvariantCulture`;只在面向最终用户显示/输入时用 `CurrentCulture`。**
 :::
 
 **5. `GetHashCode` 与 `Equals` 契约。**
-规则:如果两个对象 `Equals` 返回 `true`,它们的 `GetHashCode` **必须**相等。反过来不要求(哈希相等但对象不等是允许的冲突)。
-
-```csharp
-// 错误: 只重写 Equals,哈希不一致 → HashSet/Dictionary 行为异常
-class Bad
-{
-    public int Id;
-    public override bool Equals(object? obj) => obj is Bad b && b.Id == Id;
-    // 没有 GetHashCode!
-}
-
-var set = new HashSet<Bad>();
-set.Add(new Bad { Id = 1 });
-Console.WriteLine(set.Contains(new Bad { Id = 1 }));   // 输出: False(期望 True)
-```
-
-正确做法是用 `HashCode.Combine` 组合所有参与相等比较的字段:
-
-```csharp
-public override int GetHashCode() => HashCode.Combine(Id, Name);
-```
+两个对象 `Equals` 为 `true` 时,`GetHashCode` **必须**相等(反之不要求)。只重写 `Equals` 不重写 `GetHashCode`,会让 `HashSet` / `Dictionary` 查不到本该命中的元素;用 `HashCode.Combine` 组合参与比较的字段即可。
 
 **6. 字符串 `==` 与 `object` 上 `==` 的区别。**
-`string` 重载了 `==` 运算符,做的是**值比较**(先比引用,不同再逐字符比)。但如果你把字符串装进 `object`,就会走 `object.` 的引用比较:
+`string` 重载了 `==`,做的是**值比较**;但字符串装进 `object` 后就变成引用比较:
 
 ```csharp
 string a = new string("hello");
 string b = new string("hello");
-
-Console.WriteLine(a == b);                      // 输出: True(字符串重载)
-Console.WriteLine((object)a == (object)b);      // 输出: False(引用比较)
-Console.WriteLine(object.ReferenceEquals(a, b));// 输出: False
-
-// 安全的字符串比较应该用 string.Equals 并指定比较规则
-Console.WriteLine(string.Equals(a, b, StringComparison.Ordinal));   // 输出: True
+Console.WriteLine(a == b);                                        // True
+Console.WriteLine((object)a == (object)b);                        // False
+Console.WriteLine(string.Equals(a, b, StringComparison.Ordinal)); // True
 ```
 
-建议:需要明确语义时用 `string.Equals(x, y, StringComparison.Ordinal)`(区分大小写)或 `StringComparison.OrdinalIgnoreCase`(不区分),不要依赖 `==` 的隐式选择。涉及用户输入排序/比较时,考虑 `CurrentCulture`。
+需要明确语义时用 `string.Equals(x, y, StringComparison.Ordinal)` 或 `OrdinalIgnoreCase`,不要依赖 `==` 的隐式选择。
 
 **7. 值类型做字典键忘记实现 `IEquatable<T>`。**
 默认的 `ValueType.Equals` 走反射,放进 `Dictionary` 会慢一个数量级,而且可能因为装箱产生额外分配。自定义 struct 作为键时,一定实现 `IEquatable<T>` 并重写 `GetHashCode`。
@@ -1333,7 +834,7 @@ Console.WriteLine(string.Equals(a, b, StringComparison.Ordinal));   // 输出: T
 `int? a = null; int b = a.Value;` 会抛 `InvalidOperationException`,不是编译错误。用显式合并或 `GetValueOrDefault` 更安全。
 
 **9. `default` 枚举值可能不存在。**
-`(Status)12345` 是完全合法的,`Enum.IsDefined` 才是否则判断。反序列化外部数据后一定要校验。
+`(Status)12345` 是完全合法的,`Enum.IsDefined` 才是判断依据。反序列化外部数据后一定要校验。
 
 **10. `char` 不等于"一个字符"。**
 `char` 是 UTF-16 码元,一个 emoji 往往占两个 `char`(代理对)。要按"用户感知的字符"处理,用 `System.Globalization.StringInfo` 或者 `Rune`:
@@ -1343,3 +844,9 @@ string surrogate = "\uD842\uDFB7";                          // U+20BB7,CJK 扩�
 Console.WriteLine(surrogate.Length);                        // 输出: 2,不是 1
 Console.WriteLine(surrogate.EnumerateRunes().Count());      // 输出: 1
 ```
+
+**11. `UnityEngine.Object` 的 `==` 是重载过的。**
+Unity 的 `Object` 重载了 `==` / `!=`,用来判断"底层原生对象是否已销毁"。被 `Destroy` 的组件 `comp == null` 会返回 `true`,这是 Unity 的特殊语义,不是 .NET 的引用相等。销毁判断永远用 `== null`,别用 `ReferenceEquals` 或 `?.`。
+
+**12. 把 struct 当引用类型用。**
+`Vector3 a = b;` 复制的是值,改 `a` 不影响 `b`;从 `List<Vector3>` 取出元素修改,改的是副本,必须写回 `list[i] = v`。`struct` 内部的引用字段(如一个 `List`)则是浅拷贝,两边共享同一个对象。

@@ -1,206 +1,138 @@
-# 9. 内存、GC 与性能
+# 8. 内存、GC 与性能
 
-C# 把内存管理交给运行时,但不意味着可以无视内存。GC 停顿、大对象堆碎片、装箱分配、未释放的非托管句柄,都会以"诡异的延迟抖动"和"内存缓慢增长"的形式出现在生产环境。这一章从内存布局讲到 GC、资源释放、`Span<T>` 与池化,最后落到度量工具和优化方法论。
+C# 把内存管理交给运行时,但不意味着可以无视内存。对 Unity 游戏来说,内存问题的表现形式和传统后端服务完全不同:不是吞吐量不够,而是**某一帧突然卡一下**——一次全堆 GC 停顿把帧率打穿。这一章从栈与托管堆讲到 **Unity 的 Boehm GC**(它和 .NET 的分代 GC 是两套东西),再到 `IDisposable`、`Span<T>`、池化,最后落到 Unity Profiler 与零分配实践。
+
+::: warning
+本章默认你已经会写 C#,只是在**为 Unity 游戏开发**补内存与性能知识。如果你读过网上那些讲 .NET GC 的文章,请注意:它们的结论**不能直接搬到 Unity**。原因见下面的 GC 一节。
+:::
 
 ## 内存基础
 
-### 进程内存布局
+### 栈与托管堆
+
+每个线程有一个**栈**,方法调用时压入栈帧,存放参数、局部变量、返回地址。栈是 LIFO 的,方法返回时整个栈帧一次弹出,所以栈上数据**不需要 GC**,分配只是移动栈指针。栈容量小(主线程通常约 1MB),深递归或超大 `stackalloc` 会 `StackOverflowException`,该异常**无法捕获**,进程直接终止。
+
+**托管堆**是另一回事:所有 `new` 出来的引用类型实例、数组、闭包、装箱结果都放在这里,由 GC 负责回收。栈上"不用管",堆上"要管",这是整章的分界线。
+
+### 值的存储位置
+
+准确表述是:**值类型在其声明位置存储**,不一定是栈。以下情况它实际在堆上:
+
+```csharp
+class Holder { public Point P; }      // 1. 类字段 → 随对象在堆上
+Point[] array = new Point[10];        // 2. 数组元素 → 堆上
+object boxed = new Point(1, 2);       // 3. 装箱 → 堆上,且产生分配
+Func<int> f = () => { var p = new Point(1, 2); return p.X; }; // 4. 闭包捕获 → 提升到堆
+```
+
+跨 `await` 存活的局部值类型也会被提升到状态机。**"在栈上"的真正含义是生命周期严格嵌套于调用栈**,这才是它免 GC 的原因。
+
+### Unity 的内存版图
 
 ```text
 +----------------------------------------------+
-| 代码段 / 只读数据                             |
+| 引擎原生内存(C++ 侧:场景、网格、纹理、音频)  |
 +----------------------------------------------+
-| 线程栈(每线程一个,默认约 1MB 预留)          |
+| 托管堆(Boehm GC 管理:所有 new / 装箱 / 闭包) |
 +----------------------------------------------+
-| 托管堆 Gen0 | Gen1 | Gen2(小对象分代)       |
+| 非托管堆(malloc / P/Invoke / Native Plugin)  |
 +----------------------------------------------+
-| 大对象堆 LOH(>= 85000 字节)                  |
-+----------------------------------------------+
-| 非托管堆(malloc / VirtualAlloc / P/Invoke)   |
-+----------------------------------------------+
-| JIT 代码、运行时结构、GC 自身数据             |
+| 图形 / 音频驱动内存(GPU 显存、声卡缓冲)      |
 +----------------------------------------------+
 ```
 
-托管堆由 GC 管理,非托管堆由你或你调用的原生库管理,后者是内存泄漏的常见来源。
+Unity 里"内存占用高"可能来自上述任意一层。`Profiler.GetMonoUsedSizeLong()` 看的是托管堆,别把它和纹理、网格占用的原生内存混为一谈。
 
-### 栈帧、局部变量与参数
+## Unity 的 GC 模型
 
-每次方法调用在线程栈上压入栈帧,存放参数(部分在寄存器)、局部变量、返回地址、保存的寄存器。栈是 LIFO 的,方法返回时整个栈帧一次弹出,所以栈上的数据**不需要 GC**,分配就是移动栈指针。
+### Boehm-Demers-Weiser GC
 
-限制也很明显:
+Unity 用的不是 .NET 那套 GC,而是 **Boehm-Demers-Weiser GC**(俗称 Boehm GC),**Mono 和 IL2CPP 两个脚本后端都用它**。Unity 6.0 默认开启**增量模式**(incremental mode)。Unity 支持的语言版本是 **C# 9.0**。
 
-- 容量小(默认约 1MB),深递归或大 `stackalloc` 会 `StackOverflowException`,该异常**无法捕获**,进程直接终止。
-- 生命周期与调用栈绑定,不能跨方法返回存活。
+它和 .NET GC 的差异是本章的核心:
 
-```csharp
-void Foo()
-{
-    int x = 42;                              // 栈上
-    Span<byte> buf = stackalloc byte[256];   // 栈上,零 GC 压力
-    var p = new Point(1, 2);                 // struct 且未逃逸时通常也在栈上
-}
-```
+- **不分代**:没有 Gen0 / Gen1 / Gen2 的概念,**每次回收都是全堆扫描**,没有"扫描一小块就完事"的便宜回收。
+- **不压缩、不移动**:对象地址在分配后固定,所以根本没有"压缩整理"这一步。好处是引用永远有效、P/Invoke 天然安全;代价是**堆会碎片化、只增不减**,峰值内存下不来(游戏里表现为"玩久了内存越来越高")。
+- **回收耗时与存活对象数量和堆大小成正比**,而不是像分代 GC 那样 Gen0 很便宜。堆越大、活着的对象越多,单次停顿越长。
+- **问题形态是卡顿尖峰**:一次 GC 停顿直接掉帧,而不是吞吐量下降。
 
-### 托管堆上的对象布局
+### 增量模式:把停顿摊平
 
-```text
-+-----------------------------+  ← 对象起始地址
-| 对象头 Object Header (8B)   |  同步块索引、锁信息、GC 标记位
-+-----------------------------+
-| 方法表指针 MethodTable (8B) |  → 类型元数据,虚分派靠它
-+-----------------------------+
-| 字段 1 / 字段 2 / ...       |
-+-----------------------------+
-| 填充到 8 字节对齐           |
-+-----------------------------+
-```
+增量 GC 把一次完整回收**拆成多个小步分散到多帧**,把原本一次长停顿摊成多个短停顿。这是 Unity 的默认模式,所以你看到的往往是"偶尔掉几帧"而不是"一帧卡死半秒"。
 
-- `object` 引用指向方法表指针所在的位置(不是对象头)。
-- 引用类型实例最小 24 字节(头部 16 + 字段或对齐)。
-- 字段按大小与对齐要求排列以减少填充。
+前提是你得给它时间去分步完成。如果分配速度太快,GC 追不上,单帧内被迫做更多工作,停顿又会露头。**降低分配频率才是根本手段**。
 
-### 澄清"值类型一定在栈上"
+### 与 .NET 分代 GC 对比
 
-准确表述是:**值类型在其声明位置存储**。以下情况它实际在堆上:
+| 维度 | .NET GC | Unity Boehm GC |
+| --- | --- | --- |
+| 分代 | Gen0 / Gen1 / Gen2 + LOH | **无分代,每次全堆扫描** |
+| 压缩 | 移动存活对象,消除碎片 | **不移动,地址固定** |
+| 堆收缩 | 可回缩 | **只增不减** |
+| 成本模型 | Gen0 极便宜,与存活量弱相关 | **与存活对象数 + 堆大小成正比** |
+| 故障形态 | 吞吐量下降 | **卡顿尖峰(掉帧)** |
+| 调优手段 | Server / Workstation / 后台 GC | **增量模式 + `GCMode`** |
+| 脚本后端 | CoreCLR | Mono / IL2CPP |
 
-```csharp
-class Holder { public Point P; }     // 1. 类字段 → 随对象在堆上
-Point[] array = new Point[10];       // 2. 数组元素 → 堆上
-object boxed = new Point(1, 2);      // 3. 装箱 → 堆上
-Func<int> f = () => { var p = new Point(1, 2); return p.X; };  // 4. 闭包捕获 → 提升到堆
-```
-
-跨 `await` 存活的局部值类型也会被提升到状态机。反之,引用类型在逃逸分析后也可能栈分配,但那是 JIT 的优化,不能依赖。**"在栈上"的真正含义是生命周期严格嵌套于调用栈**,这才是性能优势的来源。
-
-## 垃圾回收
-
-### 基本原理
-
-.NET 的 GC 是**追踪式**的,不是引用计数:
-
-1. **标记**:从根(栈上引用、静态字段、GC 句柄、寄存器)出发递归遍历可达对象。
-2. **清除 / 压缩**:回收不可达对象;压缩阶段把存活对象向一端移动,消除空洞。
-
-压缩让分配变成一次指针加法,极快,但对象地址会变化,所以需要更新所有引用,且"钉住"(pinned)的对象无法移动。
-
-### 分代回收
-
-GC 基于**弱分代假说**把堆分成三代:
-
-```text
-分配 → Gen0 ──存活──→ Gen1 ──存活──→ Gen2
-        ↑回收快        ↑回收中         ↑回收慢
-        频繁           较频繁          很少
-```
-
-- **Gen0**:新对象都放这里,体积最小,回收最频繁最快。
-- **Gen1**:Gen0 存活对象的晋升目标,作为缓冲。
-- **Gen2**:长期存活对象,回收要遍历整个堆,成本最高。
-
-意义在于:每次 Gen0 回收只扫描很小区域,绝大多数临时对象(临时字符串、闭包、LINQ 中间结果)在那里就死掉,不必付 Gen2 全堆扫描的代价。
-
-```csharp
-Console.WriteLine(GC.CollectionCount(0));   // Gen0 回收次数
-Console.WriteLine(GC.CollectionCount(2));   // Gen2 回收次数
-```
-
-### 大对象堆(LOH)
-
-**大于等于 85000 字节**的对象直接进 LOH:
-
-- 大对象复制成本高,放进分代压缩堆会拖慢 GC,所以单独放。
-- .NET Core 2.1 起 LOH 只在第 2 代回收时收集。
-- **默认不压缩 LOH**,反复分配不同大小的数组会造成碎片,可能"还有大量空闲内存却 OutOfMemoryException"。
-
-```csharp
-GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
-GC.Collect();   // 下一次 GC 会压缩 LOH(代价高,谨慎)
-```
-
-`byte[85000]` 会进 LOH,`byte[84999]` 不会。缓冲区设计要留意这个临界值。
-
-### 终结器与终结器队列
-
-`~ClassName()` 用于释放**非托管**资源,执行模型很特殊:
-
-- 有终结器的对象死亡时进入**终结器队列**,由专门的终结器线程执行 `Finalize`;
-- 要等**下一次 GC** 才回收内存,即有终结器的对象至少需要两次 GC;
-- 终结器线程串行执行,大量终结器会造成堆积;
-- 对象可能在终结器里"复活"(把 `this` 存到静态字段)。
-
-因此实现终结器的类型通常提供 `Dispose`,并在其中调用 `GC.SuppressFinalize(this)` 把对象移出终结器队列。
-
-::: warning
-终结器里绝不能抛异常:异常会终止终结器线程,在 .NET Core 之后这会导致**整个进程崩溃**。也不能访问其他托管对象(它们可能已被回收),只能碰 `SafeHandle` 这类自身有保障的类型。
+::: danger
+网上很多讲 Unity 性能的文章直接套用 .NET 的分代 GC 结论,是错的。典型错误:"把对象用完就丢,GC 会走 Gen0 很快回收"——在 Unity 里没有 Gen0,这些短命对象同样会进入**全堆扫描**的代价模型;"手动 `GC.Collect()` 会破坏分代假设"——在 Unity 里它只是触发一次 Boehm 回收,后果不同;"大对象(>85KB)进 LOH"——**Unity 根本没有 LOH**。理解这一点,你才知道为什么 Unity 优化里"消除每帧分配"如此重要。
 :::
 
-### GC 模式
+### 控制 GC:GCMode 与 GC.Collect
 
-| 模式 | 说明 | 适用 |
-| --- | --- | --- |
-| 工作站 GC | 每核心一个堆,单线程回收(可后台并发) | 客户端,关注延迟 |
-| 服务器 GC | 每逻辑核心一个独立堆,多线程并行回收 | 服务端,关注吞吐 |
-| 后台 GC | Gen2 回收在后台线程进行,减少暂停 | 多数配置默认开启 |
+Unity 提供 `UnityEngine.Scripting.GarbageCollector.GCMode` 控制 GC 时机:
 
-```xml
-<PropertyGroup>
-  <ServerGarbageCollection>true</ServerGarbageCollection>
-  <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
-</PropertyGroup>
-```
-
-```bash
-DOTNET_gcServer=1
-DOTNET_GCHeapCount=4          # 限制服务器 GC 的堆数量,容器里很重要
-DOTNET_GCLOHThreshold=16384   # 调低 LOH 阈值,谨慎使用
-```
-
-服务器 GC 吞吐更高,但每堆都有独立段和 GC 线程,内存占用明显更大。
-
-### 为什么不要手动 GC.Collect
-
-它会触发一次完整(通常阻塞)回收,并且:
-
-- 破坏分代假设,把短命对象直接推到 Gen2,之后回收代价剧增;
-- 打乱 GC 的自我调节;
-- 造成明显暂停。
-
-只有极端场景才考虑:基准测定的精确基线、LOH 明确碎片化后的整理、内存敏感窗口结束后的主动释放。生产代码里的 `GC.Collect()` 通常意味着别处有问题。
-
-### 延迟模式与无 GC 区域
+- `Enabled`:默认,GC 自行决定何时回收(配合增量模式)。
+- `Disabled`:GC 完全停摆,期间**不回收任何内存**。适合对帧率极度敏感但持续时间很短的阶段,内存会持续增长,记得及时恢复。
+- `Manual`:GC 只在明确请求时回收,通常配合 `System.GC.Collect()`。
 
 ```csharp
-GCSettings.LatencyMode = GCLatencyMode.LowLatency;   // 尽量少做 Gen2 回收
-// ... 低延迟敏感的短暂窗口 ...
-GCSettings.LatencyMode = GCLatencyMode.Interactive;  // 恢复
+using UnityEngine.Scripting;
 
-if (GC.TryStartNoGCRegion(16 * 1024 * 1024))
-{
-    try { /* 期间不产生 GC 暂停 */ }
-    finally { GC.EndNoGCRegion(); }
-}
+GarbageCollector.GCMode = GarbageCollector.Mode.Disabled;
+// ... 一段不能有 GC 停顿的窗口,注意内存上限 ...
+GarbageCollector.GCMode = GarbageCollector.Mode.Enabled;
+
+System.GC.Collect();   // 在 Unity 里对应触发一次 Boehm 回收
 ```
 
-这些是高吞吐 / 实时场景的专门工具,普通应用不需要。
+`System.GC.Collect()` 在 Unity 里就是"触发 Boehm GC",不是 .NET 的分代回收。它会带来一次可感知的停顿,**不要在每帧里调**,通常只在加载完成、切场景等天然空档调用。
 
-### 观测分配
+::: tip
+`Resources.UnloadUnusedAssets()` 与 GC 是**两件事**:前者卸载不再被引用的 Asset(纹理、网格等原生内存),后者回收托管对象。切场景后内存没降,往往缺的是 `UnloadUnusedAssets()` 而不是 `GC.Collect()`。
+:::
+
+### 观测 API
 
 ```csharp
-long before = GC.GetAllocatedBytesForCurrentThread();
-var list = Enumerable.Range(0, 1000).Select(i => i.ToString()).ToList();
-long after = GC.GetAllocatedBytesForCurrentThread();
-Console.WriteLine($"本次分配 {after - before} 字节");
+using UnityEngine.Profiling;
+
+long used  = Profiler.GetMonoUsedSizeLong();          // 托管堆已用
+long heap  = Profiler.GetMonoHeapSizeLong();          // 托管堆当前大小(含空闲)
+long alloc = Profiler.GetTotalAllocatedMemoryLong();  // Unity 分配器总分配
 ```
 
-`GetAllocatedBytesForCurrentThread()` 是**当前线程**的累计分配量,基准测试里很好用;正式测量请用 BenchmarkDotNet。
+真正定位"哪里分配了"要看 **Unity Profiler 的 GC Alloc 列**(见"度量与诊断"一节)。
+
+## GC 尖峰从哪来
+
+Boehm 不分代,意味着**任何一次分配都在给全堆扫描加压**。每帧固定分配 N 字节,最终都会以卡顿形式还回来。常见源头:
+
+- **`Update()` 里的字符串拼接**:`"HP: " + hp`、插值、`string.Format`。
+- **`foreach` 拆箱**:遍历 `object[]`、`IEnumerable` 非泛型接口、字典的键值对结构。
+- **`new` 数组 / 集合**:`new int[4]`、`new List<T>()`、`ToArray()`、LINQ 的中间结果。
+- **闭包**:lambda 捕获了局部变量或 `this`,每次调用分配一个闭包对象。
+- **`GetComponent<T>()` 返回新数组**:`GetComponents<T>()`、`GetComponentsInChildren<T>()` 会分配。
+- **tag 字符串比较**:`gameObject.tag == "Player"` 内部访问 `tag` 属性会分配,`CompareTag` 不会。
+- **装箱**:把值类型塞进 `object` 容器、非泛型接口、枚举当字典键。
+- **`Camera.main`**:内部走 `FindGameObjectsWithTag`,每帧调用就是每帧分配 + 查找。
 
 ## 资源管理
 
 ### 托管资源 vs 非托管资源
 
-- **托管资源**:由 GC 管理内存的对象(`List<T>`、`string`、`byte[]`)。GC 会回收内存,**但不会执行清理逻辑**——对象持有文件句柄时,回收内存不代表句柄被关闭。
-- **非托管资源**:文件句柄、socket、数据库连接、GDI 句柄、`malloc` 内存、原生库句柄,必须显式释放。
+- **托管资源**:由 GC 管理内存的对象(`List<T>`、`string`、`byte[]`、`GameObject` 的托管包装)。GC 会回收内存,**但不执行清理逻辑**——对象持有文件句柄或原生缓冲时,回收内存不代表句柄被关闭。
+- **非托管资源**:文件句柄、socket、`malloc` 内存、Native Plugin 句柄、`Texture2D` / `Mesh` 背后的原生资源,必须显式释放。
 
 `IDisposable` 的意义就是给"清理逻辑"一个确定的调用时机。
 
@@ -212,12 +144,6 @@ public class ResourceHolder : IDisposable
     private IntPtr _nativeHandle;           // 非托管资源
     private FileStream? _stream;            // 托管资源(自身也是 IDisposable)
     private bool _disposed;
-
-    public ResourceHolder()
-    {
-        _nativeHandle = NativeMethods.Create();
-        _stream = new FileStream("data.bin", FileMode.Open);
-    }
 
     public void Dispose()
     {
@@ -250,31 +176,15 @@ public class ResourceHolder : IDisposable
 
 - **`disposing` 参数**区分调用来源:`true` 来自用户调用的 `Dispose()`,可安全访问其他托管对象;`false` 来自终结器,那些对象可能已被回收。
 - **`GC.SuppressFinalize(this)`** 把对象移出终结器队列。没有它,即使调用了 `Dispose`,对象也要多活一轮 GC。**有终结器的类型必须调用**。
-- **终结器**只是用户忘记 `Dispose` 时的安全网,代价是两次 GC。
+- **终结器**只是用户忘记 `Dispose` 时的安全网,代价是至少两次 GC。
 
 **`sealed` 类可以简化**:没有派生类就不需要 `protected virtual` 扩展点和 `disposing` 区分;没有终结器就不需要 `GC.SuppressFinalize`。
-
-```csharp
-public sealed class FastResource : IDisposable
-{
-    private IntPtr _handle;
-
-    public void Dispose()
-    {
-        if (_handle != IntPtr.Zero)
-        {
-            NativeMethods.Destroy(_handle);
-            _handle = IntPtr.Zero;
-        }
-    }
-}
-```
 
 ::: tip
 多数业务类型不需要完整模式:只持有托管资源时,让 GC 管内存、把非托管资源封装进 `SafeHandle`,然后逐个 `Dispose` 托管字段即可,连终结器都不必写。
 :::
 
-### using 语句与 using 声明
+### using 与 using 声明
 
 ```csharp
 using (var stream = File.OpenRead("a.txt"))   // 语句形式,作用域是花括号
@@ -296,16 +206,16 @@ await stream.WriteAsync(data);
 // 作用域结束时调用 await stream.DisposeAsync()
 ```
 
-类型同时实现 `IDisposable` 和 `IAsyncDisposable` 时,`await using` 优先走异步路径。async 方法里遇到异步资源就用 `await using`,同步 `Dispose` 可能阻塞线程。
+类型同时实现 `IDisposable` 和 `IAsyncDisposable` 时,`await using` 优先走异步路径。async 方法里遇到异步资源就用 `await using`。
 
-### 为什么 SafeHandle 更安全
+### SafeHandle 为什么更安全
 
 手写终结器容易出问题:可能访问已被卸载的对象、句柄为 0 时误释放、忘记标记状态。`SafeHandle` 由运行时保证引用计数(防止句柄在 P/Invoke 调用中被提前释放)、终结器恰好在正确时机执行一次,并提供 `DangerousAddRef` / `DangerousRelease` 处理临界区。
 
 ```csharp
-internal sealed class SafeFileHandleNative : SafeHandleZeroOrMinusOneIsInvalid
+internal sealed class SafeNativeHandle : SafeHandleZeroOrMinusOneIsInvalid
 {
-    public SafeFileHandleNative() : base(ownsHandle: true) { }
+    public SafeNativeHandle() : base(ownsHandle: true) { }
     protected override bool ReleaseHandle() => NativeMethods.Close(_handle) != 0;
 }
 ```
@@ -314,28 +224,11 @@ P/Invoke 声明用 `SafeHandle` 而不是 `IntPtr`,运行时就能正确钉住�
 
 ### 什么时候需要终结器
 
-很少。只在类型**直接**持有无法用 `SafeHandle` 封装的原生资源(原始 `IntPtr`、`AllocHGlobal` 内存)、且资源贯穿整个生命周期时。非托管资源已被 `SafeHandle` 包好就不需要终结器。不要为了"保险"给每个类加终结器。
-
-### 常见必须释放的资源
-
-| 资源 | 是否必须显式释放 |
-| --- | --- |
-| `FileStream` / `StreamReader` | 是,否则句柄泄漏或缓冲数据丢失 |
-| `Socket` / `TcpClient` | 是 |
-| `DbConnection` | 是,连接池需要归还,否则池会耗尽 |
-| `DbDataReader` / `Timer` | 是 |
-| `CancellationTokenRegistration` | 是,`Register` 的返回值 |
-| `HttpClient` | **不是**,应长期复用 |
-
-::: warning
-`using var client = new HttpClient();` 每个请求都 new 会耗尽 socket(`TIME_WAIT` 堆积),底层连接无法复用。正确做法是注册为单例 / 用 `IHttpClientFactory`,或在长生命周期类里 `private static readonly HttpClient`。.NET Core 之后 `SocketsHttpHandler` 自带连接池和 DNS 刷新,单例不会永远持有过期 DNS。
-:::
+很少。只在类型**直接**持有无法用 `SafeHandle` 封装的原生资源、且资源贯穿整个生命周期时才写。给每个类加终结器只会让对象多活两轮 GC,在 Unity 里直接变成额外卡顿。**不要为了"保险"加终结器**。
 
 ## unsafe 与非托管互操作(简介)
 
-```xml
-<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-```
+在 Unity 里这主要出现在写 **Native Plugin**、对接 C/C++ 库、操作原生缓冲时。启用需要 `AllowUnsafeBlocks`:
 
 ```csharp
 unsafe void Copy(byte* dest, byte* src, int length)
@@ -345,10 +238,10 @@ unsafe void Copy(byte* dest, byte* src, int length)
 
 unsafe void UseString(string s)
 {
-    fixed (char* p = s)                // 钉住,阻止 GC 移动
+    fixed (char* p = s)                // 钉住,阻止 GC 移动(Boehm 不移动,但语义仍需要)
     {
         Console.WriteLine((int)p[0]);
-    }                                   // 出块解除钉住
+    }
 }
 ```
 
@@ -367,17 +260,14 @@ finally
 }
 ```
 
-传统 P/Invoke 用 `[DllImport]`;.NET 7+ 推荐源生成器 `[LibraryImport]`,编译期生成封送代码,无运行时动态封送开销且对 Native AOT 友好:
+P/Invoke 用 `[DllImport]` 声明:
 
 ```csharp
-internal static partial class NativeMethods
-{
-    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
-    internal static partial int MessageBoxW(IntPtr hWnd, string text, string caption, uint type);
-}
+[DllImport("MyPlugin", CallingConvention = CallingConvention.Cdecl)]
+private static extern int MyPlugin_Init(IntPtr data, int length);
 ```
 
-方法必须是 `partial`。`GCHandle` 用于让非托管代码持有托管对象引用:
+`GCHandle` 用于让非托管代码持有托管对象引用:
 
 ```csharp
 GCHandle handle = GCHandle.Alloc(data, GCHandleType.Pinned);
@@ -385,11 +275,9 @@ try { IntPtr ptr = handle.AddrOfPinnedObject(); /* 传给原生代码 */ }
 finally { handle.Free(); }   // 不释放既泄漏句柄又永远钉住对象
 ```
 
-长时间钉住会阻止 GC 压缩、加剧碎片,应尽量缩短钉住时间。
-
 ## Span 与 ref 系列
 
-### `Span<T>` 与 `ReadOnlySpan<T>`
+### Span`<T>` 与 ReadOnlySpan`<T>`
 
 `Span<T>` 是"一段连续内存的视图",本质是 `(ref T, int length)`,可指向栈、数组、非托管内存或字符串,本身**不拥有**内存。
 
@@ -404,12 +292,16 @@ Console.WriteLine(array[1]);          // 输出: 99
 
 它解决的问题:传统 `array.Skip(1).Take(3).ToArray()` 或 `Substring` 做切片会**复制**。`Span<T>` 只记录偏移和长度,零分配,在解析、协议处理、字符串处理等热路径上收益巨大。
 
+::: tip
+Unity 在 **.NET Standard 2.1 兼容级别**下可用 `Span<T>` / `ReadOnlySpan<T>` / `Memory<T>`(Unity 2021.2+ 默认即是)。如果你的项目还停在 .NET Standard 2.0 或更旧的 API 兼容级别,这些类型不可用——先升兼容级别,再谈 span 优化。
+:::
+
 ### 为什么是 ref struct
 
 `Span<T>` 声明为 `ref struct`,带来一系列强制限制:
 
 - **只能在栈上**:不能做类字段、不能装箱、不能当 `object`;
-- **不能作为泛型类型参数**(C# 13 前),`allows ref struct` 反约束可放宽;
+- **不能作为泛型类型参数**;
 - **不能跨 `await`**:async 状态机会把局部变量提升到堆上,而 `Span<T>` 不允许上堆;
 - **不能跨 `yield`**,不能是 `Task<T>` 的 `T`。
 
@@ -430,7 +322,7 @@ async Task Bad()
 string text = "  hello, world  ";
 
 ReadOnlySpan<char> trimmed = text.AsSpan().Trim();   // 零分配切片
-Console.WriteLine(trimmed.ToString());               // 输出: hello, world
+Console.WriteLine(trimmed.ToString());               // 分配:只有 ToString 这一次
 
 bool hasWorld = trimmed.Contains("world", StringComparison.OrdinalIgnoreCase);
 int value = int.Parse("12345".AsSpan());              // 直接在 span 上解析
@@ -439,52 +331,23 @@ Span<char> result = stackalloc char[32];
 trimmed.CopyTo(result);
 ```
 
-`MemoryExtensions` 提供了在 span 上工作的扩展方法:`Trim`、`TrimStart`、`TrimEnd`、`StartsWith`、`EndsWith`、`Contains`、`IndexOf`、`Split`、`SequenceEqual`、`ToUpperInvariant` 等,它们不分配新字符串。
+`MemoryExtensions` 提供了在 span 上工作的扩展方法:`Trim`、`StartsWith`、`EndsWith`、`Contains`、`IndexOf`、`SequenceEqual` 等,它们不分配新字符串。比较 span 与字面量用 `span.SequenceEqual("GET".AsSpan())`。
 
-::: tip
-判断字符串是否等于某个字面量时,`span.SequenceEqual("GET")` 或 `span == "GET"`(C# 11 起 `ReadOnlySpan<char>` 有 `==`)通常是零分配的,热路径上优先用 span 版本。
-:::
-
-### `Memory<T>` 与 `ReadOnlyMemory<T>`
+### Memory`<T>` 与 ReadOnlyMemory`<T>`
 
 `Memory<T>` 是 `Span<T>` 的"可上堆"版本:可以是类字段、可以跨 `await`、可以配合 `Task<T>`,用 `.Span` 拿到实际视图。
 
 ```csharp
 async Task ReadAsync(Memory<byte> buffer)
 {
-    int read = await stream.ReadAsync(buffer);
+    int read = await stream.ReadAsync(buffer, 0, buffer.Length);
     Process(buffer.Span.Slice(0, read));
 }
 ```
 
-它比 `Span<T>` 稍重(需要引用可能被池化的底层对象),所以能用 `Span<T>` 就用 `Span<T>`,只有需要字段或跨 `await` 时才退到 `Memory<T>`。
+能用 `Span<T>` 就用 `Span<T>`,只有需要字段或跨 `await` 时才退到 `Memory<T>`。
 
-### 与数组、字符串互转
-
-```csharp
-int[] arr = { 1, 2, 3 };
-Span<int> s = arr.AsSpan();
-int[] back = s.ToArray();            // 会分配新数组
-
-ReadOnlySpan<char> chars = "abc".AsSpan();
-string str = chars.ToString();       // 会分配新字符串
-```
-
-高性能构造字符串用 `string.Create`:
-
-```csharp
-string result = string.Create(3, (byte)'a', static (span, state) =>
-{
-    span[0] = (char)state;
-    span[1] = (char)(state + 1);
-    span[2] = (char)(state + 2);
-});
-Console.WriteLine(result);    // 输出: abc
-```
-
-它直接在最终字符串内存上写,避免"先拼临时字符串再复制"的中间分配。
-
-### ref / out / in 参数
+### ref / out / in 与 readonly struct
 
 ```csharp
 void Double(ref int x) => x *= 2;                     // 可读可写,调用方须初始化
@@ -496,24 +359,21 @@ void ByValue(BigStruct s) { }   // 复制约 64 字节
 void ByIn(in BigStruct s) { }   // 只传 8 字节引用
 ```
 
-`in` 配合 `readonly struct` 效果最好——后者保证方法不修改字段,`in` 参数就不必为防御性拷贝而隐藏复制。
+`in` 配合 `readonly struct` 效果最好——后者保证方法不修改字段,`in` 参数就不必为防御性拷贝而隐藏复制。Unity 的 `Vector3`、`Quaternion` 都是小结构体,别对它们滥用 `in`。
 
 ```csharp
-public readonly struct Vector3
+public readonly struct GridPos
 {
-    public readonly double X, Y, Z;
-    public Vector3(double x, double y, double z) => (X, Y, Z) = (x, y, z);
+    public readonly int X, Y;
+    public GridPos(int x, int y) => (X, Y) = (x, y);
 }
-
-public static double Length(in Vector3 v) =>
-    Math.Sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z);
 ```
 
 ::: warning
-`in` 只在结构体较大时才值得用。对 `int` 这类小类型,它增加间接寻址,可能更慢。经验阈值是超过 16~24 字节再考虑。
+`in` 只在结构体较大时才值得用。对 `int`、`Vector2` 这类小类型,它增加间接寻址,可能更慢。经验阈值是超过 16~24 字节再考虑。
 :::
 
-### ref return 与 ref local
+### ref return
 
 ```csharp
 public class Buffer
@@ -524,15 +384,10 @@ public class Buffer
 
 var buffer = new Buffer();
 ref int slot = ref buffer.At(3);
-slot = 42;
-Console.WriteLine(buffer.At(3));   // 输出: 42
+slot = 42;                              // 直接改到数组元素,无拷贝
 ```
 
-`ref local` 保存引用,后续读写直接作用在原始位置,没有拷贝。`Span<T>` 的索引器本质就返回 `ref T`,所以 `span[0] = x` 能直接改到底层内存。
-
-### [UnscopedRef] 简介
-
-正常情况下,`ref struct` 的引用成员受"作用域"检查约束,方法不能返回可能指向更短生命周期的引用。`[UnscopedRef]`(C# 11)可放宽这个约束,是给 `ref struct` 库作者用的高级工具,普通业务代码很少需要。
+`Span<T>` 的索引器本质就返回 `ref T`,所以 `span[0] = x` 能直接改到底层内存。
 
 ## 池化与避免分配
 
@@ -555,26 +410,47 @@ finally
 **Rent 出来的数组必须 Return**,否则池退化成不停分配新数组且旧数组无法回收。归还前清理敏感数据用 `Return(buffer, clearArray: true)`。`Rent(4096)` 可能返回更大的数组,永远用 `buffer.Length` 界定有效范围。
 :::
 
-### ObjectPool`<T>`
+### ObjectPool`<T>`(UnityEngine.Pool)
+
+注意这里有两个同名类型,**别搞混**:
+
+- `UnityEngine.Pool.ObjectPool<T>`:**Unity 的**,用于池化 `GameObject`、组件、特效等游戏对象。
+- `Microsoft.Extensions.ObjectPool.ObjectPool<T>`:**.NET 的**,Unity 项目里默认不可用,只有在专门引入该包时才有。
+
+Unity 版本的典型用法:
 
 ```csharp
-var pool = new DefaultObjectPoolProvider()
-    .Create(new StringBuilderPooledObjectPolicy());
+using UnityEngine.Pool;
 
-var sb = pool.Get();
-try { sb.Append("hello"); Console.WriteLine(sb.ToString()); }
-finally { pool.Return(sb); }   // policy 负责 Reset
+public class BulletSpawner : MonoBehaviour
+{
+    [SerializeField] private Bullet _prefab;
+    private ObjectPool<Bullet> _pool;
+
+    private void Awake()
+    {
+        _pool = new ObjectPool<Bullet>(
+            createFunc:      () => Instantiate(_prefab),
+            actionOnGet:     b => b.gameObject.SetActive(true),
+            actionOnRelease: b => b.gameObject.SetActive(false),
+            actionOnDestroy: b => Destroy(b.gameObject),
+            collectionCheck: false,
+            defaultCapacity: 32,
+            maxSize:         128);
+    }
+
+    public Bullet Get()    => _pool.Get();
+    public void Release(Bullet b) => _pool.Release(b);
+}
 ```
 
-### StringBuilder vs ValueStringBuilder
-
-普通拼接用 `StringBuilder`。.NET 8+ 的 `System.Text.ValueStringBuilder` 是 `ref struct`,优先使用栈上的 `stackalloc` 缓冲,适合"构造一小段字符串后立刻 `ToString` 或写入另一个 span"的场景,零堆分配。它不能跨 `await`、不能作为字段。
+子弹、特效、UI 元素这类"频繁创建销毁"的对象都应该走池化,替代每帧 `Instantiate` / `Destroy`。
 
 ### 避免装箱
 
 ```csharp
 ArrayList list = new();
-list.Add(42);                       // 坏:装箱
+list.Add(42);                       // 坏:装箱,一次堆分配
 
 int x = 42;
 IComparable c = x;                  // 坏:接口是引用类型,装箱
@@ -585,7 +461,7 @@ numbers.Add(42);                    // 好:泛型无装箱
 if (EqualityComparer<int>.Default.Equals(a, b)) { }   // 好:无装箱比较
 ```
 
-`EqualityComparer<T>.Default` 在 `T` 实现 `IEquatable<T>` 时走无装箱的强类型比较,否则退化为 `Object.Equals`。自定义 struct 想高效比较就实现 `IEquatable<T>` 并重写 `GetHashCode`。
+`EqualityComparer<T>.Default` 在 `T` 实现 `IEquatable<T>` 时走无装箱的强类型比较,否则退化为 `Object.Equals`。自定义 struct 想高效比较就实现 `IEquatable<T>` 并重写 `GetHashCode`。别把 struct 当 `Dictionary` 的键却忘了实现这两个方法。
 
 ### 避免闭包分配
 
@@ -601,206 +477,222 @@ for (int i = 0; i < n; i++)
 }
 ```
 
-C# 9+ 的 `static` lambda 会在编译期检查是否捕获环境,捕获了直接报错,是防止意外分配的有效手段。
+C# 9 的 `static` lambda 会在编译期检查是否捕获环境,捕获了直接报错,是防止意外分配的有效手段。需要携带状态时,倾向于把状态放进结构体参数,而不是让 lambda 捕获。
 
 ### 字符串处理
 
 ```csharp
 string r1 = "";
-foreach (var item in items) r1 += item;          // 坏:O(n^2) 且大量分配
+foreach (var item in items) r1 += item;          // 坏:O(n²) 且大量分配
 
 var sb = new StringBuilder();
-foreach (var item in items) sb.Append(item);     // 好:StringBuilder
+foreach (var item in items) sb.Append(item);     // 好:StringBuilder(可复用清空)
 string r2 = sb.ToString();
 
 string csv = string.Join(",", items);            // 好:已知分隔符
-string full = string.Concat(a.AsSpan(), b.AsSpan(), c.AsSpan());  // 好:span 重载
 ```
 
-`string.Format` / 插值走格式化路径,有装箱和 `StringBuilder` 分配成本;`string.Concat` 直接分配一次目标大小的字符串,是最快的拼接方式。
+`string.Format` / 插值走格式化路径,有额外分配成本;`string.Concat` 直接分配一次目标大小的字符串。**每帧 UI 文本**是 Unity 字符串分配的重灾区:能缓存就缓存,数值变化才刷新。
 
-### 结构体 vs 类的性能权衡
+### 结构体 vs 类
 
 | 维度 | struct | class |
 | --- | --- | --- |
-| 分配 | 通常在栈上 / 内联,无 GC 压力 | 堆分配,GC 压力 |
-| 复制 | 按值复制(大结构体代价高) | 复制引用(8 字节) |
+| 分配 | 通常在栈上 / 内联,**无 GC 压力** | 堆分配,GC 压力 |
+| 复制 | 按值复制(大结构体代价高) | 复制引用 |
 | 继承 / 多态 | 不支持,需装箱 | 原生支持 |
 | 默认比较 | `ValueType.Equals` 反射比较,慢 | `ReferenceEquals`,快 |
 | 适用 | 小、不可变、生命周期短、值语义 | 大、需继承 / 引用语义 |
 
 经验法则:结构体控制在 16~24 字节以内,且要**不可变**;超过这个尺寸又频繁传递,维护成本会超过性能收益。
 
-## 度量与诊断
+## 零分配实践(Unity)
 
-### 为什么不要用 Stopwatch 做基准
+这一节是最能直接降低卡顿的部分。目标是让 `Update()` / 物理回调 / 每帧协程里**不产生托管分配**。
 
-- **JIT 编译**:首次调用是解释或快速编译的,耗时不代表稳态。
-- **预热**:类型初始化、方法内联、去虚拟化需要多次调用才稳定。
-- **GC 干扰**:一次 GC 停顿就能让某次测量大幅偏斜。
-- **死代码消除**:JIT 可能把"无可观察副作用"的计算完全删掉,你测的是空操作。
-- **测量开销**:`Stopwatch` 与 `DateTime.Now` 的成本可能与被测代码同量级。
-
-### BenchmarkDotNet 最小示例
+### 缓存 GetComponent,优先 TryGetComponent
 
 ```csharp
-[MemoryDiagnoser]
-public class StringBenchmarks
+// 坏:每帧查找 + 每次分配(找不到时还会分配错误信息)
+void Update() => GetComponent<Rigidbody>().AddForce(Vector3.up);
+
+// 好:Awake 缓存一次
+private Rigidbody _rb;
+void Awake() => _rb = GetComponent<Rigidbody>();
+void Update() => _rb.AddForce(Vector3.up);
+
+// 更好:TryGetComponent 不产生分配,失败也不抛
+if (TryGetComponent(out Rigidbody rb))
+    rb.AddForce(Vector3.up);
+```
+
+`TryGetComponent<T>(out var c)` 在找不到时不分配,而 `GetComponent<T>()` 在失败场景可能产生分配。热路径上优先 `TryGetComponent`。
+
+### CompareTag 与 Camera.main
+
+```csharp
+if (other.CompareTag("Player")) { }   // 好:无分配
+if (other.tag == "Player") { }        // 坏:tag 属性返回字符串,产生分配
+
+// 坏:每帧内部 FindGameObjectsWithTag + 分配
+Camera.main.transform.position = p;
+
+// 好:缓存
+private Camera _cam;
+void Awake() => _cam = Camera.main;
+void LateUpdate() => _cam.transform.position = p;
+```
+
+### NonAlloc 物理 API
+
+`Physics.Raycast` / `OverlapSphere` 的普通版本返回数组,每次调用都分配。用 `NonAlloc` 版本 + 预分配缓冲:
+
+```csharp
+private readonly RaycastHit[] _hits = new RaycastHit[8];
+
+void Scan()
 {
-    private readonly int[] _data = Enumerable.Range(0, 100).ToArray();
-
-    [Benchmark(Baseline = true)]
-    public string ConcatLoop()
-    {
-        string s = "";
-        foreach (int i in _data) s += i;
-        return s;
-    }
-
-    [Benchmark]
-    public string StringBuilder()
-    {
-        var sb = new StringBuilder();
-        foreach (int i in _data) sb.Append(i);
-        return sb.ToString();
-    }
+    int count = Physics.RaycastNonAlloc(origin, direction, _hits, 100f);
+    for (int i = 0; i < count; i++)
+        Process(_hits[i]);
 }
 
-public static class Program
+private readonly Collider[] _overlaps = new Collider[16];
+int n = Physics.OverlapSphereNonAlloc(center, radius, _overlaps);
+```
+
+同理还有 `Physics2D.*NonAlloc`、`Collider.GetContactsNonAlloc` 等。
+
+### for 还是 foreach
+
+老版本 Mono 的 `foreach` 对 `List<T>` 会产生枚举器装箱,现在 `List<T>` 的枚举器已是 struct,不再装箱。但仍有注意点:
+
+- **遍历数组**用 `for` 更稳(避免枚举器与边界检查开销),尤其热路径。
+- **避免用 `IEnumerable<T>` 接口遍历值类型集合**,那会走接口分派并可能装箱。
+- 字典遍历 `foreach (var kv in dict)` 的 `KeyValuePair` 是 struct,安全;但别把它当 `object` 用。
+
+### 复用缓冲与预设容量
+
+```csharp
+private readonly StringBuilder _label = new();
+private readonly List<Enemy> _visible = new(64);   // 预设 Capacity,避免扩容分配
+
+void Refresh()
 {
-    public static void Main() => BenchmarkRunner.Run<StringBenchmarks>();
+    _label.Clear();                                  // 复用,而不是 new
+    _label.Append("HP: ").Append(_hp);
+    _text.text = _label.ToString();                  // 只在真正变化时刷新
+    _visible.Clear();
 }
 ```
 
-```xml
-<PackageReference Include="BenchmarkDotNet" Version="0.14.0" />
+`List<T>` 不预设 `Capacity` 时,添加元素会触发多次扩容(每次都分配新数组并复制)。对已知规模的集合,一开始就给定容量。
+
+### 对象池替代 Instantiate / Destroy
+
+子弹、特效、飘字、列表项 UI 都应池化(见 `ObjectPool<T>` 一节)。`Instantiate` 与 `Destroy` 本身就有可观开销,叠加随之而来的托管分配,是持续卡顿的常见来源。
+
+## 什么时候该故意不管 GC
+
+不是所有分配都值得优化。以下场景请大胆分配:
+
+- **原型期**:先做出来再谈性能,过早优化会拖慢验证速度。
+- **编辑器工具代码**:只在 Editor 运行,不进包体、不影响玩家帧率。
+- **启动 / 加载阶段**:一次性、可接受停顿的地方,不值得为省几个字节把代码写复杂。
+- **每帧只跑一次、分配量极小的代码**:如果你的 `Update` 每帧只分配几十字节,优化的优先级远低于消除那次 4KB 的 `ToArray()`。
+
+判断依据是 **Profiler 里的 GC Alloc 数据**,不是直觉。先找到占比最大的分配点,而不是所有分配点。
+
+## 度量与诊断
+
+### Unity Profiler
+
+**GC Alloc 列**是首要工具:它显示每帧在托管堆上分配了多少字节。目标是在游戏稳定运行阶段把它压到接近 0。使用方法:打开 Profiler,选 CPU Usage 模块,开启 Deep Profile 或对具体标记采样,按 GC Alloc 排序找热点。
+
+### ProfilerMarker 自定义标记
+
+```csharp
+using Unity.Profiling;
+
+static readonly ProfilerMarker s_Scan = new ProfilerMarker("Enemy.Scan");
+
+void Scan()
+{
+    using (s_Scan.Auto())
+    {
+        // 会被 Profiler 计时并显示在时间轴上
+    }
+}
 ```
 
-```bash
-dotnet run -c Release
-```
+把可疑的每帧逻辑包上 `ProfilerMarker`,就能在 Profiler 时间轴上看到它占用的时间与分配,比盲猜高效得多。
 
-它会在独立子进程中运行,自动预热并多次迭代,报告均值、误差、标准差;`[MemoryDiagnoser]` 报告每次操作的分配字节数与 GC 次数。
+### Memory Profiler 与 Frame Debugger
 
-```console
-| Method        | Mean       | Ratio | Gen0   | Allocated |
-|-------------- |-----------:|------:|-------:|----------:|
-| ConcatLoop    | 12.345 us  |  1.00 | 9.5672 |  78.13 KB |
-| StringBuilder |  2.345 us  |  0.19 | 1.6785 |  13.65 KB |
-```
+- **Memory Profiler 包**:抓取托管堆快照,查看对象类型、数量、引用树,定位"谁在持有这些对象导致内存下不来"。
+- **Frame Debugger**:逐 Draw Call 查看渲染状态,排查渲染相关的性能与内存问题。
+- **Deep Profile**:对每个方法都注入采样,数据最全但开销极大,只适合在小场景里定位问题。
 
-这份输出比任何单次 `Stopwatch` 数字都可信,还顺带暴露了"循环拼接分配 78KB"这个关键信息。
+### 为什么 BenchmarkDotNet 在 Unity 用不了
 
-### 诊断工具概览
+BenchmarkDotNet 是独立的 .NET 命令行工具,它在独立进程里用 CoreCLR 跑基准,**依赖 .NET 运行时而非 Unity 的 Mono/IL2CPP 与 Boehm GC**,测出来的分配模型与 GC 行为都不是 Unity 的。在 Unity 里做微基准应:
 
-| 工具 | 用途 |
-| --- | --- |
-| `dotnet-counters` | 实时查看 GC、线程池、异常等计数器 |
-| `dotnet-trace` | 采集 CPU / 事件追踪,离线分析 |
-| `dotnet-dump` | 抓取和分析进程转储 |
-| `dotnet-gcdump` | 专门的 GC 堆快照,轻量,可看对象存活图 |
-| `dotnet-stack` | 快速 dump 所有线程的托管调用栈 |
-| PerfView | Windows 上最全的分析器,基于 ETW |
-| Visual Studio 诊断工具 | 内存快照对比、CPU 采样、分配跟踪 |
-| JetBrains dotMemory / dotTrace | 商业工具,内存 / CPU 分析 |
-| `dotnet-monitor` | 容器 / 生产环境的诊断 sidecar |
-
-### 用 dotnet-counters 观察 GC 与分配
-
-```bash
-dotnet tool install --global dotnet-counters
-dotnet-counters monitor --process-id 12345 --counters System.Runtime
-```
-
-关注这些计数器:
-
-- `gc-heap-size`:托管堆大小
-- `gen-0-gc-count` / `gen-2-gc-count`:Gen2 频繁增长说明长期存活对象在堆积
-- `alloc-rate`:分配速率,持续高企说明短命对象太多
-- `time-in-gc`:GC 时间占比,超过 10% 通常值得优化
-- `loh-size` / `poh-size`:大对象堆 / 固定对象堆大小
-
-```bash
-dotnet-trace collect --process-id 12345 --duration 00:00:30
-```
+- 用 `ProfilerMarker` 标注 + 自定义计时,在真机 / 目标平台上跑;
+- 用 `Profiler.GetMonoUsedSizeLong()` 前后差值粗测分配(可参考 `GC.GetAllocatedBytesForCurrentThread()`,但它不是主线的 Unity 观测手段);
+- 固定帧率、关闭编辑器干扰,用同一场景重复对比。
 
 ### 优化方法论
 
-1. **先测量再优化**,没有 profile 数据就没有方向,人的直觉在性能问题上错得离谱。
-2. **建立可重复的基准**,用 BenchmarkDotNet 或真实压测,固定硬件和负载。
-3. **找到真正的瓶颈**:CPU、GC、锁竞争、I/O 等待,不同瓶颈解法完全不同。
-4. **一次改一个变量**并重新测量,确认收益是否超出误差范围。
-5. **不要过早优化**,清晰可维护的代码优先,只有数据证明是热点才动手。
-6. **关注分配而非只有速度**,减少分配往往同时改善 GC 停顿和吞吐。
+1. **先用 Profiler 定位**,再动手;人的直觉在性能问题上错得离谱。
+2. **优先砍掉每帧分配**,GC Alloc 是 Unity 卡顿最直接的来源。
+3. **一次改一个变量**并重新测量,确认收益超出噪声。
+4. **区分频率**:每帧热路径值得重写,加载期一次性代码不值得。
+5. **关注分配而非只有耗时**,减少分配往往同时改善停顿与内存峰值。
+6. **真机验证**,编辑器的性能数据不能代表发布版本。
 
 ::: tip
-常见的优化顺序(从小到大):消除热路径上的装箱和闭包 → 用 `Span<T>` 替代数组切片 → 用池化替代频繁大分配 → 用异步替代阻塞 → 最后才考虑 Native AOT 之类的重手段。
+常见优化顺序(从易到难):缓存组件与 `Camera.main` → 用 `TryGetComponent` / `CompareTag` / `NonAlloc` → 复用 `StringBuilder` 与集合 → 消除闭包与装箱 → 对象池替代 `Instantiate` / `Destroy` → 用 `Span<T>` 处理解析与切片 → 最后才考虑 `GCMode.Disabled` 这类激进手段。
 :::
 
-## 发布与启动优化
+## IL2CPP 与代码剥离
 
-```bash
-dotnet publish -c Release                                   # 框架依赖,体积最小
-dotnet publish -c Release -r linux-x64 --self-contained    # 自包含
-dotnet publish -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true
-dotnet publish -c Release -r linux-x64 --self-contained -p:PublishTrimmed=true
-dotnet publish -c Release -r linux-x64 -p:PublishReadyToRun=true
-dotnet publish -c Release -r linux-x64 -p:PublishAot=true
+发布版通常用 **IL2CPP** 把 IL 转成 C++,性能更好、更难反编译,但它是 **AOT**(提前编译),与运行时 JIT 有本质区别:
+
+- **部分反射受限**:依赖运行时反射发现类型 / 调方法的代码可能被剥离掉,表现为真机上莫名其妙地失败(编辑器里正常)。
+- **泛型实例化**:值类型泛型组合需要在编译期确定,某些完全靠反射构造的泛型实例可能不被生成。
+- **托管代码剥离**:未从代码路径静态引用的类型 / 方法会被移除以减小包体。
+
+用 **`link.xml`** 显式保留不能被剥离的内容:
+
+```xml
+<linker>
+  <assembly fullname="MyGame.Core">
+    <type fullname="MyGame.Core.SaveData" preserve="all" />
+  </assembly>
+</linker>
 ```
-
-| 选项 | 体积 | 启动速度 | 限制 |
-| --- | --- | --- | --- |
-| 框架依赖 | 最小 | 一般 | 目标机需装运行时 |
-| 自包含 / 单文件 | 大 | 一般 | 无 |
-| 裁剪 | 小 | 一般 | 反射、动态加载受限 |
-| ReadyToRun | 较大 | 快 | 无重大限制 |
-| Native AOT | 小 | 最快 | 反射 / 动态代码不可用 |
-
-**ReadyToRun(R2R)**:发布时把 IL 预编译为原生代码,启动时省去部分 JIT,仍保留 IL,必要时可重新 JIT,几乎不影响功能。
-
-**Native AOT**:编译期完全确定所有代码,产出原生可执行文件,启动毫秒级、内存小。限制必须提前评估:
-
-- **反射受限**,依赖运行时反射的类型发现 / 方法调用需要源生成器替代(很多序列化器、DI 容器、ORM);
-- **动态代码不可用**:`Reflection.Emit`、`Expression.Compile`、`Assembly.Load`;
-- 部分库不兼容,交叉编译支持有限。
-
-::: warning
-迁移到 Native AOT 前先用 `PublishAot` 编译一次,看有哪些裁剪警告(IL2xxx / IL3xxx)。这些警告指向真正会在运行时炸掉的代码。
-:::
-
-### 容器化要点
-
-- 多阶段构建:构建用 SDK 镜像,运行用 runtime / `runtime-deps` 镜像。
-- 容器有内存上限时调低 `DOTNET_GCHeapCount`、调高 `DOTNET_GCConserveMemory`(0~9),避免 GC 按宿主机核心数开一堆堆而 OOM。
-- 用 `dotnet-monitor` sidecar 在生产容器里抓诊断数据,不必进容器。
-- `-alpine` / `-chiseled` 镜像体积更小,但注意 ICU / 时区数据差异;`InvariantGlobalization` 可进一步减体积,但会改变全球化行为。
 
 ## 常见性能陷阱清单
 
 | 陷阱 | 正确做法 |
 | --- | --- |
-| 循环里用 `+=` 拼接字符串(O(n²) 且大量分配) | 用 `StringBuilder`,或 `string.Join` / `string.Concat` |
-| 循环里 LINQ + 闭包,每次迭代分配迭代器和闭包 | 改 `for` / `foreach`;确需 LINQ 时用 `static` lambda |
-| `+=` 订阅事件却从不取消订阅 | 用 `-=` 取消;或用弱事件模式,注意发布者持有订阅者导致泄漏 |
-| 频繁分配超过 85000 字节的数组,造成 LOH 碎片 | 用 `ArrayPool<T>`,或减小缓冲区、拆分处理 |
-| 无谓的 `ToList()` / `ToArray()`,只为遍历一次 | 保留 `IEnumerable` 延迟求值,确实需要物化时才转换 |
-| 老代码里 `foreach` 遍历值类型集合产生装箱 | `List<T>` 枚举器已是 struct;避免用 `IEnumerable` 接口迭代 |
-| 用异常做流程控制(如 `int.Parse` 抛异常) | 用 `TryParse`;异常构造昂贵且有 stack trace 开销 |
-| `try/catch` 放在热路径里 | 移出循环;异常本身没成本,但 try 块会阻止某些优化 |
-| `async void` 造成异常失控和无法测量 | 改为 `async Task`,事件处理器除外 |
-| 热路径频繁用 `DateTime.Now`(带时区转换开销) | 用 `DateTime.UtcNow`,需要多次时缓存到局部变量 |
-| 每次调用都重新编译 `Regex` | 用源生成器 `[GeneratedRegex]` 或 `RegexOptions.Compiled`,并缓存为静态字段 |
-| 用 `string.ToLower()` 做大小写不敏感比较(还受 culture 影响) | 用 `string.Equals(a, b, StringComparison.OrdinalIgnoreCase)` |
-| `list.Count() > 0`(对 `IEnumerable` 会遍历) | 用 `list.Count > 0`,或 `list.Any()` |
-| `ConcurrentDictionary.GetOrAdd` 工厂有副作用且可能被调用多次 | 值用 `Lazy<T>`,工厂保持幂等无副作用 |
-| `new HttpClient()` 后立刻 `Dispose`,耗尽 socket | 单例 / `IHttpClientFactory` 复用 |
-| 用 `Task.Run` 包装同步 I/O(`File.ReadAllBytes`、`Thread.Sleep`) | 用原生异步 API(`ReadAllBytesAsync`、`Task.Delay`) |
-| `Concat` / 插值在热路径产生中间字符串 | 用 `Span<char>` / `string.Create` / `string.Concat(span...)` |
-| 值类型放进 `ArrayList`、`Hashtable` 或非泛型接口造成装箱 | 用 `List<T>`、`Dictionary<TKey,TValue>`,实现 `IEquatable<T>` |
-| 大结构体按值传递,反复复制几十字节 | 用 `in` 参数 + `readonly struct` |
-| 手动调用 `GC.Collect()` | 找到分配源头;仅在整理 LOH 等极端场景使用 |
-| 持有 `CancellationTokenRegistration` / `Timer` 不释放 | 用 `using` 包住或显式 `Dispose` |
-| 长时间钉住对象(忘记 `GCHandle.Free`) | 尽快释放,用 `fixed` 缩小作用域 |
-| 为"保险"给每个类加终结器 | 只有直接持有非托管资源时才加;用 `SafeHandle` 通常更好 |
-| 用 `Stopwatch` 单次测量下结论 | 用 BenchmarkDotNet,开 `[MemoryDiagnoser]` |
-| 凭直觉优化而没有 profile 数据 | 先 `dotnet-counters` / `dotnet-trace` 定位瓶颈 |
+| `Update()` 里 `"HP: " + hp` 或字符串插值 | 缓存 `StringBuilder`,`Clear()` 后复用;仅在值变化时刷新 UI |
+| 每帧 LINQ(`Where` / `Select` / `ToList`) | 改 `for` / `foreach`;确需 LINQ 时用 `static` lambda |
+| 每帧 `GetComponent<T>()` | `Awake` 缓存引用,或 `TryGetComponent<T>(out var c)` |
+| 每帧访问 `Camera.main` | `Awake` 缓存到字段(内部是 `FindGameObjectsWithTag`) |
+| `gameObject.tag == "Player"` | `gameObject.CompareTag("Player")` |
+| `foreach` 遍历值类型集合走接口造成装箱 | 用 `List<T>` 泛型枚举器;热路径用 `for` |
+| 每帧 `new List<T>()` / `ToArray()` / `ToArray` 物化 LINQ | 复用字段级集合,`Clear()` 而非 `new`;预设 `Capacity` |
+| lambda 捕获局部变量或 `this` 产生闭包 | 改 `static` lambda,或把状态放进结构体 / 字段 |
+| 每帧 `Instantiate` / `Destroy` 子弹、特效 | 用 `UnityEngine.Pool.ObjectPool<T>` 池化 |
+| `SendMessage` / `BroadcastMessage` | 用接口、事件或直接引用调用(名字查找 + 反射开销) |
+| `GameObject.Find` / `FindWithTag` 在运行期反复调用 | 初始化时查找并缓存,或通过引用 / 单例传递 |
+| 把 struct 丢进 `object`、`ArrayList`、非泛型接口 | 用泛型容器;实现 `IEquatable<T>` + `GetHashCode` |
+| 每帧 `Resources.Load` | 预加载并缓存,或用 Addressables 异步加载 |
+| 协程里每次 `new WaitForSeconds(t)` | 缓存 `WaitForSeconds` / `WaitForEndOfFrame` 实例并复用 |
+| `Physics.Raycast` / `OverlapSphere` 每帧调用 | 用 `RaycastNonAlloc` / `OverlapSphereNonAlloc` + 预分配缓冲 |
+| 每帧 `.ToString()` 刷新数字文本 | 只在数值变化时刷新;用缓存字符串或 `StringBuilder` |
+| 为"保险"给每个类加终结器 | 只有直接持有非托管资源时才加;优先用 `SafeHandle` |
+| 热路径里频繁 `foreach` 数组 + 闭包捕获 | 用 `for`,把状态放进结构体参数 |
+| 频繁手动 `GC.Collect()` | 找到每帧分配源头;只在加载 / 切场景空档调用 |
+| 无 Profiler 数据凭感觉优化 | 用 Profiler 的 GC Alloc 列 + `ProfilerMarker` 定位 |

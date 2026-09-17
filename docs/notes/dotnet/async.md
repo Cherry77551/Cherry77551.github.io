@@ -1,6 +1,6 @@
-# 8. 异步编程与并发
+# 7. 异步编程与并发
 
-C# 用 `async` / `await` 把异步编程的表达成本压得极低,但也正因为语法顺手,大量能跑却会死锁、会耗尽线程池、会吞掉异常的代码正流通在生产环境里。这一章从概念、语法、编译器实现讲到线程同步与并发集合。
+C# 用 `async` / `await` 把异步编程的表达成本压得极低,但也正因为语法顺手,大量能跑却会死锁、会耗尽线程池、会吞掉异常的代码正流通在生产环境里。这一章从概念、语法、编译器实现讲到线程同步与并发集合,并说明它们在 Unity(C# 9 + Boehm GC)里的特殊约束。
 
 ## 概念辨析
 
@@ -27,10 +27,6 @@ C# 用 `async` / `await` 把异步编程的表达成本压得极低,但也正因
 任务 A: [发起 I/O]........[等待]........[处理结果]
 任务 B: ....[发起 I/O]........[等待]........[处理结果]
          A 等待期间,B 占用同一个线程
-
-多核上的并行
-线程 1: [计算..............]
-线程 2: [计算..............]   ← 同一时刻真的同时执行
 ```
 
 - **并发**像"一个人一边烧水一边切菜",单核也能做。
@@ -107,81 +103,18 @@ public async Task<string> DownloadAsync(string url)
 两条重要推论:
 
 - **`async` 方法在执行到第一个真正需要等待的 `await` 之前是同步的**,运行在调用者线程上。
-- **被 await 的任务若已完成,`await` 不切换线程也不分配续体**,直接同步往下走。这是所有异步性能优化的基础。
-
-```csharp
-async Task DemoAsync()
-{
-    Console.WriteLine("A");       // 同步执行
-    await Task.CompletedTask;     // 已完成 → 不返回,继续
-    Console.WriteLine("B");       // 仍在原线程
-}
-```
+- **被 await 的任务若已完成,`await` 不切换线程也不分配续体**,直接同步往下走(如 `await Task.CompletedTask`)。这是所有异步性能优化的基础。
 
 ### 编译器生成的状态机
 
-`async` 方法会被改写成实现了 `IAsyncStateMachine` 的**结构体**,包含:
+`async` 方法不是运行时魔法,而是被编译器改写成实现了 `IAsyncStateMachine` 的**结构体**:
 
 - `int state` 字段:记录执行到哪一步(`-1` 未启动 / 已完成,`-2` 异常);
-- 被提升为字段的局部变量与 `this`(因为要跨 `await` 存活);
-- 一个 `AsyncTaskMethodBuilder`(泛型版本为 `AsyncTaskMethodBuilder<T>`,还有 `AsyncValueTaskMethodBuilder` 等),负责创建 `Task`、启动状态机、设置结果或异常;
-- `void MoveNext()`:原方法体被拆成若干段,由状态字段分发。
+- 跨 `await` 存活的局部变量与 `this` 被提升为字段;
+- 一个 `AsyncTaskMethodBuilder`(泛型版本 `AsyncTaskMethodBuilder<T>`、`AsyncValueTaskMethodBuilder` 等),负责创建 `Task`、启动状态机、写入结果或异常;
+- 原方法体被拆成若干段,由 `MoveNext()` 按 `state` 分发。
 
-```csharp
-// 源码
-async Task<int> AddAsync(int a, int b)
-{
-    await Task.Delay(1);
-    return a + b;
-}
-```
-
-```csharp
-// 编译后的大致结构(简化,非真实 IL)
-private struct AddAsyncStateMachine : IAsyncStateMachine
-{
-    public int state;              // -1 初始,0 表示 await 之后
-    public AsyncTaskMethodBuilder<int> builder;
-    public int a, b;               // 跨 await 的参数被提升为字段
-    private TaskAwaiter awaiter;
-
-    public void MoveNext()
-    {
-        int result;
-        try
-        {
-            TaskAwaiter awaiter;
-            if (state != 0)
-            {
-                awaiter = Task.Delay(1).GetAwaiter();
-                if (!awaiter.IsCompleted)
-                {
-                    state = 0;
-                    this.awaiter = awaiter;
-                    builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);
-                    return;                     // 关键:首次 await 未完成时直接返回
-                }
-            }
-            else
-            {
-                awaiter = this.awaiter;
-                this.awaiter = default;
-                state = -1;
-            }
-            awaiter.GetResult();                // 异常在这里抛出
-            result = a + b;
-        }
-        catch (Exception ex)
-        {
-            state = -2;
-            builder.SetException(ex);           // 异常交给 builder
-            return;
-        }
-        state = -1;
-        builder.SetResult(result);              // 把返回值写入 Task
-    }
-}
-```
+以 `async Task<int> AddAsync(int a, int b) { await Task.Delay(1); return a + b; }` 为例,编译器生成的 `MoveNext()` 大致做这几件事:首次进入时调用 `Task.Delay(1).GetAwaiter()`,如果 `IsCompleted` 为 `false` 就把 `state` 置为 `0`、保存 awaiter、通过 `builder.AwaitUnsafeOnCompleted` 注册续体后 `return`;任务完成后由调度器再次调用 `MoveNext()`,从 `state == 0` 分支取出 awaiter、`GetResult()`、执行 `return a + b`、调用 `builder.SetResult`。整个方法体被包在 `try` 里,`catch` 则调用 `builder.SetException`。
 
 由此可得:
 
@@ -192,15 +125,7 @@ private struct AddAsyncStateMachine : IAsyncStateMachine
 ### return 与异常的流转
 
 - `return value` 不是真正返回,而是调用 `builder.SetResult(value)` 写入结果并把任务置为完成。
-- `throw` 被状态机的 `catch` 捕获后调用 `builder.SetException(ex)`,任务变为 faulted。异常**不会同步抛给调用者**,而是保存在任务里等 `await` 时重新抛出。
-
-```csharp
-async Task ThrowAsync() => throw new InvalidOperationException("boom");
-
-var t = ThrowAsync();           // 不抛异常
-Console.WriteLine(t.IsFaulted); // 输出: True
-await t;                        // 这里才抛出
-```
+- `throw` 被状态机的 `catch` 捕获后调用 `builder.SetException(ex)`,任务变为 faulted。异常**不会同步抛给调用者**,而是保存在任务里等 `await` 时重新抛出。例如 `async Task ThrowAsync() => throw new InvalidOperationException("boom");` 调用后立即返回一个 faulted 的 `Task`,只有 `await` 它时才抛出。
 
 ## 返回类型选择
 
@@ -213,16 +138,7 @@ await t;                        // 这里才抛出
 
 ### ValueTask
 
-`Task` 是引用类型,每次返回都要堆分配。对"经常同步完成"的方法(读缓存、读已缓冲的流),这个分配是纯浪费。`ValueTask` 是结构体,可包装已完成结果(零分配)、池化的 `IValueTaskSource<T>`,或退化为普通 `Task`。
-
-```csharp
-private readonly Dictionary<string, string> _cache = new();
-
-public ValueTask<string> GetAsync(string key) =>
-    _cache.TryGetValue(key, out var value)
-        ? new ValueTask<string>(value)              // 同步完成,零分配
-        : new ValueTask<string>(LoadFromDiskAsync(key));
-```
+`Task` 是引用类型,每次返回都要堆分配。对"经常同步完成"的方法(读缓存、读已缓冲的流),这个分配是纯浪费。`ValueTask` 是结构体,可包装已完成结果(零分配)、池化的 `IValueTaskSource<T>`,或退化为普通 `Task`。典型写法是命中缓存时直接 `new ValueTask<string>(value)`,否则 `new ValueTask<string>(LoadFromDiskAsync(key))`。
 
 ::: danger
 `ValueTask` 的契约是**同一个实例只能被 await 一次**。它可能包装一个被池化复用的 `IValueTaskSource`,第二次 await 时底层对象可能已被改写。也不要对它调 `.Result` / `.GetAwaiter().GetResult()`。需要多次使用或存起来时,先 `.AsTask()`。
@@ -230,17 +146,9 @@ public ValueTask<string> GetAsync(string key) =>
 
 ### async void
 
-```csharp
-private async void OnButtonClick(object sender, EventArgs e)
-{
-    await Task.Delay(1000);
-    label.Text = "done";
-}
-```
+只允许事件处理器 / Unity 生命周期方法使用。它的问题:
 
-只允许事件处理器用,因为:
-
-- **异常无法捕获**:没有返回值,`AsyncVoidMethodBuilder` 无处安放异常,只能直接抛到当前 `SynchronizationContext`(无上下文时抛到线程池,导致进程崩溃);
+- **异常无法捕获**:没有返回值,`AsyncVoidMethodBuilder` 无处安放异常,只能直接抛到当前 `SynchronizationContext`(无上下文时抛到线程池,导致进程崩溃)。**Unity 里这往往表现为异常被静默吞掉或直接卡死**。
 - **无法 await**,调用方拿不到句柄;
 - **无法测试**。
 
@@ -255,8 +163,11 @@ private async void OnButtonClick(object sender, EventArgs e)
 它回答一个问题:"`await` 之后,续体应该在哪个线程继续?"
 
 - **UI 应用**:上下文绑定 UI 线程,续体被 `Post` 回 UI 线程,可以安全更新控件。
-- **经典 ASP.NET(非 Core)**:上下文绑定当前请求,保证 `HttpContext.Current` 可用。
-- **控制台 / ASP.NET Core**:默认**没有**同步上下文,续体在线程池线程上继续。
+- **控制台等默认环境**:默认**没有**同步上下文,续体在线程池线程上继续。
+
+::: warning
+Unity 并不保证主线程上一定有可用的同步上下文,`await` 之后的代码**不一定回到主线程**;而 `Transform`、`GameObject`、`Instantiate` 等 Unity API 只能在主线程调用。详见后面的「Unity 里的异步」一节。
+:::
 
 ### 经典死锁
 
@@ -266,7 +177,6 @@ private void Button_Click(object sender, RoutedEventArgs e)
     string content = GetContentAsync().Result;   // 死锁
     textBox.Text = content;
 }
-
 private async Task<string> GetContentAsync()
 {
     await Task.Delay(1000);                       // 捕获了 UI 同步上下文
@@ -274,15 +184,10 @@ private async Task<string> GetContentAsync()
 }
 ```
 
-过程:
-
-1. UI 线程进入 `GetContentAsync()`,在 `await` 处挂起并**捕获 UI 上下文**,把未完成的 Task 交回 `Button_Click`。
-2. `Button_Click` 调 `.Result`,**同步阻塞 UI 线程**等待任务完成。
-3. 1 秒后 `Task.Delay` 完成,续体被调度回 UI 上下文,需要 UI 线程来执行 `return "hello"`。
-4. 但 UI 线程正卡在 `.Result` 上,永远没空执行续体。任务永不完成,调用永不返回。
+过程:UI 线程进入 `GetContentAsync()` 后,在 `await` 处挂起并**捕获 UI 上下文**,把未完成的 Task 交回 `Button_Click`;`Button_Click` 调 `.Result` **同步阻塞 UI 线程**。1 秒后任务完成,续体需要 UI 线程来执行 `return "hello"`,但 UI 线程正卡在 `.Result` 上,永远没空执行——任务永不完成,调用永不返回。
 
 ::: danger
-UI 线程上的 `.Result` / `.Wait()` / `.GetAwaiter().GetResult()` 都是死锁候选。ASP.NET Core 默认没有同步上下文,同样写法不会死锁,但会**阻塞线程池线程**,高并发下造成饥饿,属于同一类问题的另一种表现。
+UI 线程上的 `.Result` / `.Wait()` / `.GetAwaiter().GetResult()` 都是死锁候选。即使在没有同步上下文的环境(如 Unity 主线程)里不会死锁,这么写也会**阻塞线程**,拖慢整个主线程。
 :::
 
 ### ConfigureAwait(false)
@@ -290,15 +195,13 @@ UI 线程上的 `.Result` / `.Wait()` / `.GetAwaiter().GetResult()` 都是死锁
 `ConfigureAwait(false)` 表示"续体不需要回到原上下文,在线程池线程继续即可"。
 
 - **库代码**:除极少数例外一律使用。库不该假设调用方有上下文,也不该为回到上下文付出调度开销和死锁风险。
-- **UI 应用**:需要操作控件时保留上下文,其余部分可用 `ConfigureAwait(false)`,最后用 `Dispatcher.InvokeAsync` 回去更新。
-- **ASP.NET Core**:没有同步上下文,它只为正确性无关地省掉一点调度判断开销。但库仍应写,因为库会被 UI 应用引用。
+- **需要回到主线程的代码**:不要写 `false`,否则后续调用 Unity API 会抛异常。
 
 ### 死锁排查
 
-1. 搜 `.Result` / `.Wait()` / `.GetAwaiter().GetResult()`,尤其在 UI 线程或请求线程上同步等待异步方法的位置。
+1. 搜 `.Result` / `.Wait()` / `.GetAwaiter().GetResult()`,尤其在主线程上同步等待异步方法的位置。
 2. 检查是否有 `lock` 内调用异步、或锁顺序相反的情况。
-3. `dotnet-dump` + `dotnet-dump analyze` 的 `clrstack` / `dumpasync`,或 Visual Studio "并行堆栈" 窗口看等待链。
-4. 修复通常是自下而上全链路异步,把 UI 事件处理器改成 `async void`(它合法的场景)然后 await 到底。
+3. 修复通常是全链路异步,把事件回调改成 `async void`(它合法的场景)然后 await 到底。
 
 ## 异常处理
 
@@ -307,24 +210,17 @@ UI 线程上的 `.Result` / `.Wait()` / `.GetAwaiter().GetResult()` 都是死锁
 ```csharp
 public async Task<string?> TryFetchAsync(string url)
 {
-    try
-    {
-        using var client = new HttpClient();
-        return await client.GetStringAsync(url);
-    }
-    catch (HttpRequestException ex) when (ex.StatusCode != null)
+    try { return await client.GetStringAsync(url); }
+    catch (HttpRequestException ex)
     {
         Console.WriteLine($"请求失败: {ex.Message}");
         return null;
     }
-    finally
-    {
-        await FlushLogsAsync();      // finally 里也可以 await
-    }
+    finally { await FlushLogsAsync(); }   // finally 里也可以 await
 }
 ```
 
-`catch` / `finally` 里都可以 `await`,异常过滤器 `when` 依然有效。注意 `catch` 中若再抛异常会替换原异常。
+`catch` / `finally` 里都可以 `await`,异常过滤器 `when` 依然有效;注意 `catch` 中若再抛异常会替换原异常。
 
 ### Task.WhenAll 的异常行为
 
@@ -333,34 +229,23 @@ Task t1 = FailAsync("A");
 Task t2 = FailAsync("B");
 Task all = Task.WhenAll(t1, t2, Task.Delay(100));
 
-try
-{
-    await all;
-}
+try { await all; }
 catch (Exception ex)
 {
     Console.WriteLine(ex.Message);                            // 输出: A(只看到第一个)
     Console.WriteLine(all.Exception!.InnerExceptions.Count);  // 输出: 2
 }
+
+foreach (var ex in all.Exception!.Flatten().InnerExceptions)
+    Console.WriteLine(ex.Message);   // 依次输出 A、B
 ```
 
 规则:
 
 - **`await Task.WhenAll(...)` 只抛出第一个异常**,不是 `AggregateException`。这是为了避免开发者写 `catch (AggregateException)` 却永远进不去。
-- 全部异常在返回的聚合 `Task` 的 `Exception` 属性里,类型是 `AggregateException`。
+- 全部异常在返回的聚合 `Task` 的 `Exception` 属性里,类型是 `AggregateException`(`.Flatten()` 可拍平嵌套)。
 - `WhenAll` 传入 `Task<T>` 时返回 `Task<T[]>`,结果按输入顺序排列。
 - `WhenAny` **永远不抛异常**,返回第一个完成的任务(可能失败或取消),需自己 `await` 它才会抛出。
-
-```csharp
-try { await all; }
-catch (Exception)
-{
-    foreach (var ex in all.Exception!.Flatten().InnerExceptions)
-        Console.WriteLine(ex.Message);   // 依次输出 A、B
-}
-```
-
-`.Flatten()` 把嵌套的 `AggregateException` 拍平一层,`InnerExceptions` 是只读集合。
 
 ### 未观察异常
 
@@ -450,11 +335,7 @@ public async Task<string> FetchWithTimeoutAsync(string url, CancellationToken ou
 }
 ```
 
-链接令牌在任一输入取消时取消,这样才能区分"对方主动取消"和"超时取消"。对于不支持令牌的旧 API,可用 `Task.WhenAny` 与 `Task.Delay` 竞速实现超时,并对仍在跑的任务挂 `ContinueWith` 观察其异常。
-
-::: tip
-.NET 6+ 直接提供了 `await task.WaitAsync(TimeSpan.FromSeconds(5), ct);`,不要手写竞速。
-:::
+链接令牌在任一输入取消时取消,这样才能区分"对方主动取消"和"超时取消"。若只是给单个任务加超时,.NET 6+ 提供了 `await task.WaitAsync(TimeSpan.FromSeconds(5), ct);`,不要手写 `WhenAny` + `Task.Delay` 竞速。
 
 ### 取消时的资源清理
 
@@ -509,22 +390,7 @@ await foreach (Task<string> task in Task.WhenEach(tasks))
 
 ### Parallel.ForEachAsync 与 Parallel.For
 
-```csharp
-await Parallel.ForEachAsync(urls,
-    new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct },
-    async (url, token) =>
-    {
-        using var client = new HttpClient();
-        string html = await client.GetStringAsync(url, token);
-        Console.WriteLine($"{url}: {html.Length}");
-    });
-```
-
-`Parallel.For` / `Parallel.ForEach` 是同步的 CPU 密集型工具,会阻塞调用线程直到全部完成:
-
-```csharp
-Parallel.For(0, 1000, i => _results[i] = ComputeHeavy(i));
-```
+`Parallel.ForEachAsync` 用于限制并发度地跑一批异步任务,参数是 `ParallelOptions { MaxDegreeOfParallelism, CancellationToken }`。`Parallel.For` / `Parallel.ForEach` 则是同步的 CPU 密集型工具,会阻塞调用线程直到全部完成。**Unity 里慎用**:这些回调可能不在主线程,不能触碰 Unity API。
 
 ### 限制并发度
 
@@ -558,45 +424,14 @@ public void Increment()
 }
 ```
 
-编译后大致等价于:
-
-```csharp
-bool lockTaken = false;
-try
-{
-    Monitor.Enter(_gate, ref lockTaken);
-    _count++;
-}
-finally
-{
-    if (lockTaken) Monitor.Exit(_gate);
-}
-```
-
-锁是**可重入**的(同一线程可重复进入),`Monitor.Enter` / `Exit` 必须配对,`finally` 保证异常时也释放。锁的是对象引用对应的同步块,不是对象内容。
+`lock` 编译后就是 `Monitor.Enter` / `Monitor.Exit`(包在 `try/finally` 里)。锁是**可重入**的(同一线程可重复进入),`Enter` / `Exit` 必须配对,锁的是对象引用对应的同步块,不是对象内容。
 
 锁对象选择:
 
 - **不要锁 `this`**:外部代码能锁住同一对象,造成意外竞争甚至死锁。
 - **不要锁 `string` 字面量**:字符串驻留让所有相同字面量共享同一对象。
-- **不要锁 `Type`**:`typeof(X)` 全局唯一,同样会被外部影响。
-- **不要锁值类型**:每次装箱都是新对象,锁完全失效。
+- **不要锁 `Type` / 值类型**:`typeof(X)` 全局唯一;值类型每次装箱都是新对象,锁完全失效。
 - **推荐**:`private readonly object _gate = new();`。
-
-### C# 13 的 System.Threading.Lock
-
-C# 13 引入专门的 `System.Threading.Lock`,编译器会生成更高效的代码路径(基于 `Lock.EnterScope()` 返回的 `ref struct`,不需要 `Monitor` 的 `lockTaken` 状态跟踪):
-
-```csharp
-private readonly Lock _gate = new();
-
-public void Increment()
-{
-    lock (_gate) { _count++; }   // 编译器识别 Lock,走专用路径
-}
-```
-
-新项目在 .NET 9+ 上可以直接使用。
 
 ### Interlocked 与 volatile
 
@@ -611,22 +446,7 @@ public void Increment()
 }
 ```
 
-`CompareExchange` 是无锁算法的基础原语:
-
-```csharp
-private static Configuration? _config;
-
-public static Configuration GetConfig()
-{
-    var existing = Volatile.Read(ref _config);
-    if (existing is not null) return existing;
-
-    var created = BuildConfig();
-    return Interlocked.CompareExchange(ref _config, created, null) ?? created;
-}
-```
-
-`volatile` 只解决可见性与指令重排,不解决原子性——`i++` 依旧是三步操作。
+`CompareExchange` 是无锁算法的基础原语("当前值等于预期值时才替换"),常用于懒初始化。`volatile` 只解决可见性与指令重排,不解决原子性——`i++` 依旧是三步操作。
 
 | 手段 | 解决什么 |
 | --- | --- |
@@ -636,31 +456,12 @@ public static Configuration GetConfig()
 
 ### 其他同步原语
 
-```csharp
-private readonly ReaderWriterLockSlim _rw = new();
-
-public string Read()
-{
-    _rw.EnterReadLock();
-    try { return _data; }
-    finally { _rw.ExitReadLock(); }
-}
-
-public void Write(string value)
-{
-    _rw.EnterWriteLock();
-    try { _data = value; }
-    finally { _rw.ExitWriteLock(); }
-}
-```
-
 | 原语 | 用途 |
 | --- | --- |
+| `SemaphoreSlim` | 限制并发数量,支持 `WaitAsync`,是异步互斥的首选 |
 | `ReaderWriterLockSlim` | 读并发、写互斥,适合读多的缓存 |
-| `SemaphoreSlim` | 限制并发数量,支持 `WaitAsync` |
 | `Mutex` | 跨进程互斥(命名 Mutex),比 `Monitor` 慢得多 |
-| `ManualResetEventSlim` | 一次放行多个等待者,需手动 `Reset` |
-| `AutoResetEvent` | 每次 `Set` 只放行一个等待者 |
+| `ManualResetEventSlim` / `AutoResetEvent` | 线程间发信号,分别一次放行多个 / 一个等待者 |
 | `CountdownEvent` | 等 N 个信号到齐后一次性放行 |
 
 ### 死锁的四个必要条件
@@ -696,71 +497,38 @@ var m2 = m1 with { Amount = 200m };   // 新对象,原对象不变
 
 ## 并发集合
 
-### ConcurrentDictionary`<TKey, TValue>`
+### `ConcurrentDictionary<TKey, TValue>`
 
 ```csharp
 var dict = new ConcurrentDictionary<string, int>();
-int value = dict.GetOrAdd("a", _ => 0);
+dict.GetOrAdd("a", _ => 0);
 dict.AddOrUpdate("a", 1, (key, old) => old + 1);
-if (dict.TryRemove("a", out int removed)) Console.WriteLine(removed);
+if (dict.TryRemove("a", out int removed)) { /* ... */ }
 ```
 
 ::: warning
-`GetOrAdd` 和 `AddOrUpdate` 的工厂 / 更新委托**可能被多次调用**。并发写入下多个线程可能同时发现键不存在、各自执行一次工厂,只有一个结果被写入。因此:
-
-- 工厂必须**幂等且无副作用**,不要在里面递增计数器、发请求、写文件。
-- 需要"只初始化一次"时,把值设为 `Lazy<T>`。
+`GetOrAdd` / `AddOrUpdate` 的工厂委托**可能被多次调用**:并发写入下多个线程可能同时发现键不存在、各自执行一次工厂,只有一个结果被写入。因此工厂必须**幂等且无副作用**;需要"只初始化一次"时把值设为 `Lazy<T>`。它们只保证单次调用原子,跨多次的"读-改-写"组合不原子,需要整体原子就用 `TryUpdate` 重试或加锁。
 :::
 
-```csharp
-var cache = new ConcurrentDictionary<string, Lazy<byte[]>>();
-var bytes = cache.GetOrAdd(path, p =>
-    new Lazy<byte[]>(() => File.ReadAllBytes(p),
-        LazyThreadSafetyMode.ExecutionAndPublication)).Value;
-```
-
-`GetOrAdd` / `AddOrUpdate` 只保证单次调用原子,跨多次调用的"读-改-写"组合不原子,需要整体原子就用 `TryUpdate` 重试或加锁。
-
 ### ConcurrentQueue / ConcurrentStack / ConcurrentBag
+
+`ConcurrentDictionary<TKey, TValue>` 是唯一常用且值得掌握的并发集合,其余几个大多可以用"普通集合 + `lock`"替代:
+
+| 类型 | 特点 |
+| --- | --- |
+| `ConcurrentQueue<T>` | 无锁并发队列,`Enqueue` / `TryDequeue` |
+| `ConcurrentStack<T>` | 后进先出,`Push` / `TryPop` |
+| `ConcurrentBag<T>` | 无序,优先返回本线程加入的元素 |
 
 ```csharp
 var queue = new ConcurrentQueue<WorkItem>();
 queue.Enqueue(item);
 if (queue.TryDequeue(out var got)) { /* ... */ }
-
-var stack = new ConcurrentStack<int>();
-stack.Push(1);
-if (stack.TryPop(out int top)) { /* ... */ }
-
-var bag = new ConcurrentBag<int>();   // 无序,优先返回本线程加入的元素
-bag.Add(1);
-if (bag.TryTake(out int any)) { /* ... */ }
 ```
-
-`ConcurrentBag` 为每个线程维护本地存储,适合同一线程既生产又消费、全局顺序无意义的场景。
 
 ### BlockingCollection 与 Channel
 
-`BlockingCollection<T>` 的 `Take` 会阻塞线程:
-
-```csharp
-using var collection = new BlockingCollection<string>(boundedCapacity: 100);
-
-var producer = Task.Run(() =>
-{
-    foreach (var item in data) collection.Add(item);
-    collection.CompleteAdding();
-});
-
-var consumer = Task.Run(() =>
-{
-    foreach (var item in collection.GetConsumingEnumerable()) Process(item);
-});
-
-await Task.WhenAll(producer, consumer);
-```
-
-**新代码推荐 `System.Threading.Channels`**,它原生支持异步并带背压:
+`BlockingCollection<T>` 的 `Take` 会**阻塞线程**,是旧的线程池式生产者-消费者方案。**新代码推荐 `System.Threading.Channels`**,它原生支持异步并带背压:
 
 ```csharp
 using System.Threading.Channels;
@@ -770,88 +538,108 @@ var channel = Channel.CreateBounded<string>(new BoundedChannelOptions(100)
     FullMode = BoundedChannelFullMode.Wait
 });
 
-var producer = Task.Run(async () =>
-{
-    foreach (var item in data) await channel.Writer.WriteAsync(item);  // 满了异步等
-    channel.Writer.Complete();
-});
+await channel.Writer.WriteAsync(item);   // 满了就异步等
+channel.Writer.Complete();
 
-var consumers = Enumerable.Range(0, 4).Select(_ => Task.Run(async () =>
-{
-    await foreach (var item in channel.Reader.ReadAllAsync()) Process(item);
-}));
-
-await Task.WhenAll(consumers.Append(producer));
+await foreach (var item in channel.Reader.ReadAllAsync())
+    Process(item);                       // 消费者可多个
 ```
 
-| 对比 | BlockingCollection | Channel |
-| --- | --- | --- |
-| 等待方式 | 阻塞线程 | 异步 `await` |
-| 背压 | 有界容量阻塞 | `BoundedChannelFullMode` |
-| 推荐度 | 旧代码维护 | 新代码首选 |
+`Channel<T>` 的读端是 `IAsyncEnumerable<T>`,天然配合 `await foreach`;`BoundedChannelFullMode` 提供背压,不会像无界 `Task` 洪流那样打爆内存。
 
 ## 其他
 
-### async Main
-
-C# 7.1 起入口点可以是 `async`,编译器会生成同步包装,内部 `GetAwaiter().GetResult()`,此时没有单线程同步上下文,所以安全:
-
-```csharp
-public static async Task Main(string[] args) => await RunAsync();
-```
-
 ### `IProgress<T>` 与 `Progress<T>`
 
-```csharp
-public async Task DownloadAsync(IProgress<int> progress)
-{
-    for (int i = 0; i <= 100; i += 10)
-    {
-        await Task.Delay(50);
-        progress.Report(i);
-    }
-}
+`Progress<T>` 在构造时捕获当前 `SynchronizationContext`,`Report` 把回调 Post 回该上下文;在后台线程构造就跑到线程池上。Unity 里没有可靠的主线程上下文,用它回主线程并不可靠,应该用 `Awaitable` 或 UniTask(见下节)。
 
-var reporter = new Progress<int>(p => Console.WriteLine($"进度 {p}%"));
+```csharp
+var reporter = new Progress<int>(p => Debug.Log($"进度 {p}%"));
 await DownloadAsync(reporter);
 ```
 
-`Progress<T>` 在构造时捕获当前 `SynchronizationContext`,`Report` 把回调 Post 回该上下文;在后台线程构造就跑到线程池上。
-
 ### TaskCompletionSource`<T>`
 
-把回调式 API 包装成 `Task`:
-
-```csharp
-public static Task<int> ReadAsync(this Stream stream, byte[] buffer, int offset, int count)
-{
-    var tcs = new TaskCompletionSource<int>(
-        TaskCreationOptions.RunContinuationsAsynchronously);
-
-    stream.BeginRead(buffer, offset, count, ar =>
-    {
-        try { tcs.TrySetResult(stream.EndRead(ar)); }
-        catch (Exception ex) { tcs.TrySetException(ex); }
-    }, null);
-
-    return tcs.Task;
-}
-```
-
-用 `TrySetResult` / `TrySetException` / `TrySetCanceled` 避免竞争;`RunContinuationsAsynchronously` 防止回调线程被续体内联占用。
+`TaskCompletionSource<T>` 把回调式 API 包装成 `Task`:创建 TCS,回调里用 `TrySetResult` / `TrySetException` / `TrySetCanceled` 避免竞争,最后返回 `tcs.Task`。创建时传 `TaskCreationOptions.RunContinuationsAsynchronously`,防止回调线程被续体内联占用。包装旧的回调式插件 API 时很有用。
 
 ### ValueTask 与 IValueTaskSource
 
-高吞吐库(Kestrel、`System.IO.Pipelines`)会实现 `IValueTaskSource<T>`,把异步完成状态存在池化对象上,通过 `GetStatus` / `OnCompleted` / `GetResult` 暴露给 `ValueTask`。完全同步完成的热路径上可做到零堆分配,代价是必须严格管理生命周期。普通业务代码无需自己实现。
+高吞吐库会实现 `IValueTaskSource<T>`,让高频同步完成的路径零分配;普通业务代码无需自己实现,直接返回 `ValueTask` 即可。
+
+## Unity 里的异步
+
+### 主线程约束
+
+Unity 大部分 API(`Transform`、`GameObject`、`Instantiate`、`GetComponent` 以及渲染、物理调用)只能在**主线程**执行。而 `await` 之后的续体可能落在线程池线程上,所以下面这段代码在 Unity 里**不保证安全**:
+
+```csharp
+async Task MoveAsync(Transform t)
+{
+    await Task.Delay(1000);
+    t.position += Vector3.up;   // 可能不在主线程 → 抛异常
+}
+```
+
+::: danger
+Unity 不提供 .NET 那种"主线程同步上下文"的默认保证,`await` 之后的代码**不一定回到主线程**。任何 `await` 之后访问 Unity API 的代码都必须显式回到主线程。
+:::
+
+### Unity 6 的 `Awaitable`
+
+Unity 6 新增了 `UnityEngine.Awaitable`,专门解决这个问题:`Awaitable.NextFrameAsync()`、`Awaitable.WaitForSecondsAsync(1f)` 等完成后**保证回到主线程**,并且不分配 `Task`。这是 Unity 官方推荐的异步方案。
+
+```csharp
+async Awaitable MoveAsync(Transform t)
+{
+    await Awaitable.WaitForSecondsAsync(1f, destroyCancellationToken);
+    t.position += Vector3.up;   // 保证在主线程
+}
+```
+
+`Awaitable` 面向的是 Unity 的帧与主线程时序,不适合真正的后台 I/O;它也**不应在 `await` 之后配 `ConfigureAwait(false)`**。
+
+### 社区方案 UniTask
+
+Unity 6 之前,社区广泛使用 **UniTask**(Cysharp):零分配的 `ValueTask` 风格类型,完全构建在 Unity 的 PlayerLoop 上,`await` 保证回主线程,并提供 `UniTask.DelayFrame`、`UniTask.Yield`、`WhenAll`、`CancellationToken` 支持。项目已在用就继续用;新项目可优先考虑官方 `Awaitable`。
+
+### 对象被销毁后的回调
+
+`MonoBehaviour` 被 `Destroy` 后,挂起的 `await` 仍会继续执行,此时访问已销毁对象会抛 `MissingReferenceException`。标准做法是每个组件在 `OnDestroy` 里取消自己的令牌:
+
+```csharp
+private readonly CancellationTokenSource _cts = new();
+
+async void StartWork()                       // 生命周期方法,async void 是少数合法场景
+{
+    try { await DoWorkAsync(_cts.Token); }
+    catch (OperationCanceledException) { }
+}
+
+void OnDestroy() => _cts.Cancel();           // 销毁时取消所有挂起任务
+```
+
+`Awaitable` 的 `destroyCancellationToken` 能达到同样效果。非生命周期方法一律用 `async Task`,以便异常可被观察。
+
+### 协程 vs async/await
+
+| 维度 | 协程(`IEnumerator` + `yield return`) | `async` / `await` |
+| --- | --- | --- |
+| 调度 | 绑定 `MonoBehaviour`,随对象销毁自动停止 | 与对象生命周期无关,需手动取消 |
+| 时序控制 | 天然逐帧:`yield return null` / `WaitForSeconds` | 用 `Awaitable` / UniTask 才能逐帧 |
+| 异步 I/O | 做不到(会在主线程阻塞) | 真正的异步 I/O 主场 |
+| 异常 | 不能跨 `yield` 用 `try/catch` 捕获外部异常 | `try/catch` 正常 |
+| 分配 | 每次 `yield` 有少量分配 | `Awaitable` / UniTask 可接近零分配 |
+
+**选择建议**:逐帧流程、简单延时、动画时序用协程;网络请求、文件读写、需要取消与异常处理的逻辑用 `async` / `await`。两者可以在同一个类里共存。
 
 ## 常见坑
 
-1. **`async void` 滥用**:只有事件处理器能用,异常直抛上下文、无法 await 或测试。改为 `async Task`。
-2. **`.Result` / `.Wait()` / `.GetAwaiter().GetResult()`**:UI 线程上必然死锁,线程池线程上造成饥饿。
+1. **`async void` 滥用**:只有事件处理器 / Unity 生命周期方法能用,异常直抛上下文、无法 await 或测试。其他一律 `async Task`。
+2. **`.Result` / `.Wait()` / `.GetAwaiter().GetResult()`**:UI / Unity 主线程上必然死锁,线程池线程上造成饥饿。
 3. **忘记 `await`**:拿到的是 `Task` 而非结果,异常还被吞进未观察任务。把 CS4014 当错误处理。
 4. **`Task.Run` 包装同步 I/O**:不会让 I/O 变快,只多占一个线程。
 5. **`await` 在 `lock` 里**:编译器直接报错。用 `SemaphoreSlim.WaitAsync`。
-6. **`ConfigureAwait` 位置错误**:库代码不写 `ConfigureAwait(false)` 引入死锁风险;UI 代码在需要更新控件后仍写 `false` 会跨线程访问控件。
+6. **`ConfigureAwait` 位置错误**:库代码不写 `ConfigureAwait(false)` 引入死锁风险;需要回到主线程的代码写 `false` 会导致后续 Unity API 调用抛异常。
 7. **取消令牌忘记透传**:调用链任一层漏传,取消就断在那里。
 8. **`Task.WhenAll` 只看到第一个异常**:要全部异常需 `all.Exception.Flatten().InnerExceptions`。
 9. **`ValueTask` 被 await 两次或读 `.Result`**:未定义行为,需要多次使用先 `.AsTask()`。
@@ -860,5 +648,6 @@ public static Task<int> ReadAsync(this Stream stream, byte[] buffer, int offset,
 12. **无界并发**:一次性 `WhenAll` 几万个任务会打满线程池或压垮下游,用 `SemaphoreSlim` / `Parallel.ForEachAsync` 限流。
 13. **`CancellationTokenSource` 没 Dispose**:订阅了定时器或链接令牌时会泄漏,用 `using`。
 14. **`ct.Register` 的返回值被丢弃**:回调被长期持有造成泄漏,用 `using` 包住。
-15. **后台线程直接更新 UI**:抛 `InvalidOperationException`,用 `Dispatcher.InvokeAsync` 或 `Progress<T>` 回主线程。
-16. **`finally` 里 await 后再抛异常**:会覆盖原异常,丢失真正的错误信息。
+15. **后台线程直接调用 Unity API**:抛异常或未定义行为,用 `Awaitable` / UniTask 回主线程。
+16. **`MonoBehaviour` 销毁后 await 回调继续跑**:访问已销毁对象抛 `MissingReferenceException`,在 `OnDestroy` 里 `Cancel` 令牌。
+17. **`finally` 里 await 后再抛异常**:会覆盖原异常,丢失真正的错误信息。

@@ -60,7 +60,7 @@ docs/
 ├─ index.md             # 首页
 ├─ about.md             # 关于
 ├─ notes/               # 笔记
-│  ├─ dotnet/          #   C# / .NET 系列(11 篇)
+│  ├─ dotnet/          #   C# 笔记(为 Unity 准备,8 篇)
 │  ├─ linux/
 │  └─ web/
 ├─ projects/            # 项目

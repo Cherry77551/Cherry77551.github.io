@@ -1,6 +1,6 @@
-# 4. 面向对象:类、接口与继承
+# 3. 面向对象:类、接口与继承
 
-C# 是单继承、多实现的面向对象语言。与 Java 相比，它把"成员默认不虚"写进了语言设计，又通过 `interface` 的默认成员、`record`、模式匹配等机制逐步补上表达力。本篇覆盖类的组成、属性与构造函数、访问控制、继承与多态、抽象类与接口、扩展方法、`IDisposable` 模式与运算符重载。
+C# 是单继承、多实现的面向对象语言，方法默认不虚。**Unity 使用 C# 9**，所以本篇以 C# 9 为基准，覆盖类的组成、属性与构造函数、访问控制、继承与多态、抽象类与接口、扩展方法、`IDisposable` 模式与运算符重载。开头先说一句：`MonoBehaviour` 就是一个普通的 C# 类，只是它的实例由引擎创建和销毁。
 
 ## 类的基本结构
 
@@ -26,6 +26,8 @@ public class Sample
     public class Nested { }             // 嵌套类型
 }
 ```
+
+`MonoBehaviour` 同样拥有这些成员，但它由 Unity 引擎创建和销毁，所以**不要给它写构造函数**——初始化放在 `Awake()` / `Start()`。`Awake`/`Update` 等由引擎通过反射调用，因此通常写成 `private`。
 
 ### 字段
 
@@ -53,8 +55,6 @@ public class Config
 `const` 的值会被**内联**到调用方的 IL 中。发布一个改了 `const` 值的库，依赖方若不重新编译，用的还是旧值。要跨版本热更新，用 `static readonly` 或属性。
 :::
 
-`volatile` 告诉编译器该字段可能被其他线程修改，禁止对它做缓存优化。它只保证可见性，不保证原子性；复杂同步仍要用 `Interlocked` 或 `lock`。
-
 ### 属性全解
 
 属性是"方法对"的语法糖，外部看起来像字段。
@@ -65,7 +65,6 @@ public class User
     public string Name { get; set; } = "";      // 自动属性
     public int Age { get; private set; }         // 外部只读，内部可写
     public string Email { get; init; } = "";     // 只能在初始化时设值
-    public required string Id { get; set; }       // 调用方必须初始化
     public string Display => $"{Name} ({Age})";   // 表达式体，计算属性
 
     public void Birthday() => Age++;
@@ -77,17 +76,13 @@ public class User
 **`init` 访问器**（C# 9）：只能在对象初始化器或构造函数中赋值，之后不可变，适合打造不可变对象。
 
 ```csharp
-var u = new User { Name = "Alice", Email = "a@x.com", Id = "u1" };
+var u = new User { Name = "Alice", Email = "a@x.com" };
 // u.Email = "b@x.com";  // 编译错误
 ```
 
-**`required` 成员**（C# 11）：标记调用方必须通过初始化器赋值，编译器强制检查，避免漏设关键字段。
-
-```csharp
-var u2 = new User { Name = "Bob", Id = "u2" };
-// 缺少 Id 会编译错误；缺少 Name 因为默认值可以省略
-// required 成员即使有默认值也必须在初始化器里出现或由构造函数满足
-```
+::: warning
+Unity 只支持 C# 9，编译 `init` 需要自己声明 `System.Runtime.CompilerServices.IsExternalInit` 类型（一个空的 `internal static class` 即可）；并且 **Unity 序列化不支持 `record`**。因此 `init` 在 Unity 里主要用于纯 C# 数据对象，而非需要序列化的组件数据。
+:::
 
 **计算属性与缓存**：计算每次访问都执行，开销大时手动缓存：
 
@@ -97,26 +92,18 @@ public string Cached => _cached ??= ExpensiveCompute();
 private string ExpensiveCompute() => new string('x', 1000);
 ```
 
-**C# 14 的 `field` 关键字**：在属性访问器里用 `field` 直接引用编译器生成的后备字段，不用再手写 `_name`。
+**手写后备字段**：要在访问器里做校验或延迟计算时，直接写后备字段：
 
 ```csharp
-// C# 14 之前
 private string _name = "";
 public string Name
 {
     get => _name;
     set => _name = value ?? throw new ArgumentNullException(nameof(value));
 }
-
-// C# 14
-public string Name
-{
-    get => field;
-    set => field = value ?? throw new ArgumentNullException(nameof(value));
-}
 ```
 
-**属性 vs 字段的取舍**：对外成员一律用属性——它支持版本演进（可加逻辑/校验）、接口成员、数据绑定、序列化框架约定。字段只用于 `private` 内部状态；即便是内部状态，`readonly` 字段优先。
+**属性 vs 字段的取舍**：对外成员一律用属性——它支持版本演进（可加逻辑/校验）、接口成员、数据绑定、序列化框架约定。字段只用于 `private` 内部状态；即便是内部状态，`readonly` 字段优先。Unity 里 `[SerializeField] private` 让字段保持私有、又能被检视面板序列化，正好符合这条准则。
 
 ### 构造函数
 
@@ -152,13 +139,6 @@ public class Dog : Animal
 
 ```csharp
 var dog = new Dog("Rex", "Husky") { Breed = "Malamute" }; // Breed 若 init 则可
-```
-
-`required` 与 `SetsRequiredMembers`（C# 11）：构造函数若通过特性声明"我已经设置了所有 required 成员"，调用方就不必再在初始化器里补：
-
-```csharp
-[SetsRequiredMembers]
-public User(string id) => Id = id;
 ```
 
 **静态构造函数**：在类型**首次被使用前**由运行时调用一次，无参数、无访问修饰符、不可直接调用，用于初始化静态状态。
@@ -220,28 +200,7 @@ m[1, 2] = 5;
 Console.WriteLine(m[1, 2]); // 输出: 5
 ```
 
-配合 `Index` / `Range` 类型支持 `^`（末尾）与 `..`（范围）：
-
-```csharp
-public class Buffer
-{
-    private readonly int[] _items = { 0, 1, 2, 3, 4, 5 };
-
-    public int this[Index i] => _items[i.GetOffset(_items.Length)];
-    public int[] this[Range r]
-    {
-        get
-        {
-            var (start, len) = r.GetOffsetAndLength(_items.Length);
-            return _items[start..(start + len)];
-        }
-    }
-}
-
-var buf = new Buffer();
-Console.WriteLine(buf[^1]);     // 输出: 5
-Console.WriteLine(string.Join(',', buf[1..4])); // 输出: 1,2,3
-```
+索引器还可接收 `Index` / `Range` 类型以支持 `^`（末尾）与 `..`（范围）语法，实现时用 `i.GetOffset(length)` 和 `r.GetOffsetAndLength(length)` 换算。
 
 ### 访问修饰符完整表
 
@@ -253,34 +212,13 @@ Console.WriteLine(string.Join(',', buf[1..4])); // 输出: 1,2,3
 | `internal` | 当前程序集 |
 | `protected internal` | 当前程序集 **或** 派生类型（并集） |
 | `private protected` | 当前程序集中 **的** 派生类型（交集） |
-| `file`（C# 11） | 仅当前源文件 |
+| `file`（C# 11） | 仅当前源文件（**Unity 用不了**，C# 9） |
 
 默认可见性：**类成员默认 `private`**，顶层类型默认 `internal`，接口成员默认 `public`。
 
-```csharp
-file class Helper { }   // 只在本 .cs 文件可见，适合源生成器产物
-```
-
 ### this 与 base
 
-```csharp
-public class Base
-{
-    public virtual void Run() => Console.WriteLine("base");
-}
-
-public class Child : Base
-{
-    public void Run() => Console.WriteLine("child");  // 隐藏，不是重写
-    public void CallBase() => base.Run();
-    public void CallSelf() => this.Run();
-
-    public Child() : base() { }        // 调用基类构造
-}
-```
-
-- `this`：引用当前实例，可用于 `this()` 构造链、区分参数与字段。
-- `base`：访问基类成员（构造、方法、属性）。
+`this` 引用当前实例（用于 `this()` 构造链、区分参数与字段）；`base` 访问基类成员（构造、方法、属性），如 `base.Run()`、`: base(name, 4)`。
 
 ## 继承与多态
 
@@ -334,18 +272,7 @@ public sealed class Circle : Shape
 
 ### 返回类型协变（C# 9）
 
-重写方法可以返回更派生的类型：
-
-```csharp
-public class Factory
-{
-    public virtual object Create() => new object();
-}
-public class CatFactory : Factory
-{
-    public override Cat Create() => new();   // 协变返回
-}
-```
+重写方法可以返回更派生的类型：基类返回 `object`，重写返回 `Cat`。Unity 的 C# 9 支持它。
 
 ### Object 的四个方法
 
@@ -368,24 +295,7 @@ Console.WriteLine(new Money(1, "CNY").GetType().Name); // 输出: Money
 
 ### 浅拷贝与深拷贝
 
-`MemberwiseClone` 是 `protected` 的，做**浅拷贝**（复制值类型字段和引用字段的引用，不复制引用指向的对象）。
-
-```csharp
-public class Node : ICloneable
-{
-    public int Value;
-    public List<int> Data = new();
-
-    public object Clone()
-    {
-        var copy = (Node)MemberwiseClone();  // 浅拷贝
-        copy.Data = new List<int>(Data);     // 手动深拷贝引用字段
-        return copy;
-    }
-}
-```
-
-没有自动深拷贝；嵌套引用需要逐层处理或借助序列化。
+`MemberwiseClone`（`protected`）做浅拷贝，只复制引用不复制对象；深拷贝需手动逐层处理或借助序列化。
 
 ## 抽象类 vs 接口
 
@@ -425,12 +335,12 @@ public class Both : IReader, IWriter
 }
 
 var b = new Both();
-Console.WriteLine(((IReader)b).Get()); // 输出: reader
-Console.WriteLine(((IWriter)b).Get()); // 输出: writer
+((IReader)b).Get();  // "reader"
+((IWriter)b).Get();  // "writer"
 // b.Get();  // 编译错误：必须转成接口
 ```
 
-显式实现的成员不能加访问修饰符，且**只能通过接口调用**，因此常用来"对外隐藏"某些能力。
+显式实现的成员不能加访问修饰符，且**只能通过接口调用**，常用来"对外隐藏"能力。
 
 ### 默认接口成员（C# 8）
 
@@ -446,39 +356,11 @@ public interface ILogger
 
 用途是 **API 演进**：给已有接口添加成员而不用改所有实现类。但要注意菱形继承问题——一个类通过多条接口路径继承到不同默认实现，编译器会强制你在类里显式重写以消除歧义（或者必须指定 `InterfaceName.Member`）。
 
-调用限制：默认成员**不进入类的成员表**，只有通过接口引用才能调用：
-
-```csharp
-ILogger logger = concrete;
-logger.LogError("boom");   // 可以
-// concrete.LogError("boom"); // 不行
-```
+调用限制：默认成员**不进入类的成员表**，只有通过接口引用才能调用（`concrete.LogError()` 会编译错误）。
 
 ::: warning
-默认接口成员无法访问实现类的实例状态，且需要运行时支持（.NET Core 3.0+）。它们适合小改动，不要指望用它来替代抽象类。
+Unity 支持默认接口成员（C# 8）。但它无法访问实现类的实例状态，且需要运行时支持（.NET Core 3.0+）。它适合小改动，不要指望用它替代抽象类。
 :::
-
-### 静态抽象成员（C# 11）
-
-接口可以声明必须在实现类型上提供的静态成员，泛型约束里可据此调用：
-
-```csharp
-public interface IParseable<TSelf> where TSelf : IParseable<TSelf>
-{
-    static abstract TSelf Parse(string s);
-}
-
-public struct Celsius : IParseable<Celsius>
-{
-    public double Value;
-    public static Celsius Parse(string s) => new() { Value = double.Parse(s) };
-}
-
-T Parse<T>(string s) where T : IParseable<T> => T.Parse(s);
-Console.WriteLine(Parse<Celsius>("12.5").Value); // 输出: 12.5
-```
-
-这是"静态虚成员"的落地方式，泛型数学（generic math）依赖此机制。详见第 5 篇。
 
 ### 接口继承与成员冲突
 
@@ -503,12 +385,7 @@ public static class MathUtil
 public static readonly DateTime Start = DateTime.UtcNow; // 无静态构造，可能提前
 ```
 
-多线程下的延迟初始化用 `Lazy<T>`：
-
-```csharp
-private static readonly Lazy<Heavy> _heavy =
-    new(() => new Heavy(), LazyThreadSafetyMode.ExecutionAndPublication);
-```
+多线程下的延迟初始化用 `Lazy<T>`（默认 `ExecutionAndPublication` 模式）。
 
 ## 扩展方法
 
@@ -538,20 +415,6 @@ Console.WriteLine("level".IsPalindrome()); // 输出: True
 - 不能扩展 `static` 成员，也不能做真正的多态（编译期静态分派）。
 - 滥用会污染智能提示。适合的场景是"给第三方类型加便利方法"，不适合替代自己的类型设计。
 
-C# 14 引入**扩展成员**（extension blocks），可以扩展属性、索引器甚至静态成员：
-
-```csharp
-public static class EnumerableExtensions
-{
-    extension<T>(IEnumerable<T> source)
-    {
-        public bool IsEmpty => !source.Any();
-    }
-}
-
-// Console.WriteLine(list.IsEmpty);
-```
-
 ## 部分类与部分方法
 
 `partial` 把一个类型的定义拆到多个文件，常用于源生成器与 UI 代码：
@@ -574,24 +437,12 @@ public partial class Widget
 要点：
 
 - 部分方法必须返回 `void` 且默认 `private`（C# 9 之前）；C# 9 起可以有返回值、`out` 参数和访问修饰符，此时**必须有实现**（否则编译错误），且可以是 `static`。
-- C# 13 支持**部分属性**（`partial` 属性，声明与实现分离），配合源生成器尤其有用。
 - 所有 `partial` 片段必须有相同访问级别与类型名称。
+- Unity 里 `partial` 很常见：源生成器会为你生成另一半（如自动生成的 `MonoBehaviour` 配套代码），手写代码与生成代码分开维护。
 
 ## 嵌套类
 
-```csharp
-public class Outer
-{
-    private int _secret = 42;
-
-    public class Inner
-    {
-        public int Reveal(Outer o) => o._secret; // 可访问外围私有成员
-    }
-}
-```
-
-嵌套类可以访问外围类型的 `private` 成员（需持有实例引用），但外围类也能访问嵌套类的 `private` 成员。适合"仅服务外围类的辅助类型"，能有效缩小作用域。
+嵌套类与外围类型可以互相访问对方的 `private` 成员（访问实例成员需持有实例引用）。适合"仅服务外围类的辅助类型"，能有效缩小作用域。
 
 ## IDisposable 模式
 
@@ -623,14 +474,7 @@ public class ResourceHolder : IDisposable
 }
 ```
 
-若类型不需要终结器且不会被继承，可简化并 `sealed`：
-
-```csharp
-public sealed class Simple : IDisposable
-{
-    public void Dispose() { /* 释放资源 */ }
-}
-```
+若类型不需要终结器且不会被继承，可简化并 `sealed`，只实现 `Dispose()` 即可。
 
 调用方有两种语法：
 
@@ -649,7 +493,7 @@ using var r2 = new ResourceHolder();   // using 声明（C# 8），方法结束�
 
 ## 运算符重载
 
-可重载的运算符包括算术、比较、`!`、位运算、`true`/`false`、`++`/`--` 以及转换运算符；`=`、`&&`、`||`、`?:`、`.`、`->`、`new` 不可重载。
+可重载的运算符包括算术、比较、`!`、位运算、`++`/`--` 以及转换运算符；`=`、`&&`、`||`、`?:`、`.`、`->`、`new` 不可重载。
 
 ```csharp
 public readonly struct Money
@@ -679,17 +523,15 @@ public readonly struct Money
 
 - 重载 `==` 必须同时重载 `!=`，反之亦然；并应与 `Equals`/`GetHashCode` 保持一致。
 - `implicit` 转换应"绝不会失败且不丢信息"，否则用 `explicit`。
-- `operator true`/`false` 用于让类型出现在 `if` 条件中（`&&`/`||` 无法重载，但可借 `true`/`false` 参与短路逻辑）。
 
 ## 类设计准则
 
-- **优先组合而非继承**：继承耦合基类实现，组合更容易替换与测试。
-- **优先不可变**：`init` + `readonly` + `record` 让并发与推理都更简单。
-- **让类型默认正确**：构造函数强制必要参数，用 `required` 堵住漏设。
+- **优先组合而非继承**：继承耦合基类实现，组合更容易替换与测试。Unity 里尤其重要——继承 `MonoBehaviour` 很贵，能用组件组合就别加深继承链。
+- **优先不可变**：`init` + `readonly` 让并发与推理都更简单。
+- **让类型默认正确**：构造函数强制必要参数，堵住漏设。
 - **最小化可变状态**：可变状态是 bug 与并发问题的温床。
 - **类默认 `sealed`**：除非为继承设计，否则封死它，防止别人依赖你的实现细节。
 - **公开 API 用接口或只读抽象**：`IReadOnlyList<T>` 优于暴露 `List<T>`。
-- **`record` 用于值语义数据**：自动 `Equals`/`GetHashCode`/`ToString`/`with`，见第 5 篇。
 
 ## 常见坑
 
@@ -705,3 +547,13 @@ public readonly struct Money
 10. **默认接口成员当成抽象类用**。它无法访问实例状态，且继承链有歧义时编译强制消解。
 11. **属性里做重活**。属性应廉价、无副作用，重活放方法；否则调试、绑定、序列化都会意外触发。
 12. **`readonly` 字段指向可变对象**。`readonly` 只锁定引用，不锁定对象内容，集合仍可改。
+
+## Unity 用不了的 C# 特性
+
+Unity 目前只编译到 **C# 9**，以下更新的特性在 Unity 里用不了，迁移时需替换：
+- **C# 11 `required` 成员**及 `SetsRequiredMembers`。
+- **C# 11 静态抽象成员**（`static abstract`）与泛型数学。
+- **C# 11 `file` 局部类型**。
+- **C# 13 部分属性**（`partial` 属性）。
+- **C# 14 `field` 关键字**与扩展成员（extension blocks）。
+- **`init` 访问器**：需自行声明 `IsExternalInit`；**`record` 无法被 Unity 序列化**。
