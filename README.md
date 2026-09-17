@@ -54,7 +54,9 @@ docs/
 ├─ .vitepress/
 │  ├─ config.mts        # 导航、侧边栏、站点信息
 │  └─ theme/
-│     └─ custom.css     # 淡绿色主题(改配色就看这个文件)
+│     ├─ index.ts         # 主题入口(注册首页组件)
+│     ├─ SplitHome.vue    # 首页那两块大的「笔记 / 项目」入口
+│     └─ custom.css       # 淡绿色主题 + 背景图(改配色就看这个文件)
 ├─ index.md             # 首页
 ├─ about.md             # 关于
 ├─ notes/               # 笔记
@@ -62,6 +64,8 @@ docs/
 │  └─ web/
 ├─ projects/            # 项目
 └─ public/              # 静态文件,原样复制到网站根目录
+   ├─ bg.svg            # 默认背景图(换成自己的就是改这里)
+   └─ favicon.svg       # 浏览器标签页图标
 ```
 
 ## 改配色
@@ -73,13 +77,35 @@ docs/
   --vp-c-brand-1: #3f9d6d;   /* 链接、文字高亮 */
   --vp-c-brand-2: #348a5f;   /* 悬浮 */
   --vp-c-brand-3: #54b380;   /* 主按钮背景 */
-  --vp-c-bg: #f7fbf8;        /* 页面底色 */
-  --vp-c-bg-alt: #edf5f0;    /* 侧边栏底色 */
+  --vp-c-bg: rgba(247, 251, 248, 0.86);   /* 页面底色(半透明,让背景图透出来) */
+  --vp-c-bg-alt: rgba(237, 245, 240, 0.9);
   --vp-c-divider: #dbeade;   /* 分隔线 */
 }
 ```
 
 `.dark { ... }` 里是深色模式的对应值。
+
+## 换背景图
+
+1. 把你的图片放进 `docs/public/`,例如 `docs/public/bg.jpg`
+2. 打开 `docs/.vitepress/theme/custom.css`,把这一行改掉:
+
+   ```css
+   --site-bg-image: url('/bg.jpg');
+   ```
+
+   路径以 `/` 开头,对应的是 `docs/public/` 目录。
+
+3. 想让图片更明显 / 更淡,调 `--site-bg-veil`(遮罩不透明度),数值越小图越清楚:
+
+   ```css
+   --site-bg-veil: rgba(247, 251, 248, 0.45);
+   ```
+
+4. 不想要背景图就写 `--site-bg-image: none;`
+
+> 图片建议先在别处压缩到 300KB 以内再放进来,不然打开会慢。
+
 
 ## 上线部署(只需要做一次)
 
@@ -131,8 +157,10 @@ cat ~/.ssh/id_ed25519.pub                  # 把输出粘到 GitHub → Settings
 
 - [x] `docs/about.md`、`docs/projects/*.md` 里的 GitHub 链接(已填 `Cherry77551`)
 - [x] `docs/.vitepress/config.mts` 里的 footer 名字
-- [ ] 站点名称/昵称:现在是 `Cherry777`,出现在 `docs/index.md` 的 `name` 和 `config.mts` 的 `title`
+- [ ] 站点名称/昵称:现在是 `Cherry777`,在 `docs/.vitepress/config.mts` 的 `title`
+- [ ] 换背景图:`docs/public/` 里放图,改 `custom.css` 的 `--site-bg-image`(见上面「换背景图」)
 - [ ] `docs/public/favicon.svg` 想换的话直接替换文件
+- [ ] 首页那两块入口的文字在 `docs/.vitepress/theme/SplitHome.vue` 里的 `panels`
 - [ ] 想公开邮箱的话,加在 `docs/about.md` 的联系方式里
 
 ## 后面可以加的
