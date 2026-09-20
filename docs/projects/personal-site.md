@@ -13,9 +13,9 @@
 
 我觉得笔记和项目可以组成自己的个人博客了。
 
-vibecoding真方便呀。
+vibecoding 真方便呀。
 
-### 目录
+## 目录
 
 ```text
 website/
@@ -32,5 +32,4 @@ website/
 └─ .github/workflows/
    └─ deploy.yml           # 自动部署
 ```
-
 

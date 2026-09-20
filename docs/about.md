@@ -6,12 +6,11 @@
 
 ## 最近在干什么
 
-2026下半年在学 C# 和 Unity,打算从小游戏开始,做点能真跑起来的东西。
-
+2026 下半年在学 C# 和 Unity,打算从小游戏开始,做点能真跑起来的东西。
 
 ## 这个站
 
-用 [VitePress](https://vitepress.dev/) 搭的。所有内容都是 Markdown 文件。大部分都是通过vibe coding。
+用 [VitePress](https://vitepress.dev/) 搭的。所有内容都是 Markdown 文件。大部分都是通过 vibe coding。
 
 ## 找我
 
