@@ -438,7 +438,7 @@ function entryStyle(i: number) {
 .entry__scrim {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, rgba(58, 38, 43, 0.8), rgba(58, 38, 43, 0.12));
+  background: linear-gradient(to top, rgba(31, 45, 43, 0.8), rgba(31, 45, 43, 0.12));
   opacity: 0;
 }
 
@@ -448,7 +448,7 @@ function entryStyle(i: number) {
 
 .card--entry:hover {
   transform: scale(1.02) translateY(-3px);
-  box-shadow: 0 18px 40px -14px rgba(154, 90, 100, 0.5);
+  box-shadow: 0 18px 40px -14px rgba(46, 125, 107, 0.5);
 }
 
 .card--entry:hover .entry__cover {
@@ -569,7 +569,7 @@ function entryStyle(i: number) {
   box-shadow: 0 1px 2px rgba(37, 90, 78, 0.05);
   font-size: 11px;
   font-weight: 700;
-  color: #2f6f66;
+  color: #256556;
 }
 
 /* ---------------- 响应式 ---------------- */

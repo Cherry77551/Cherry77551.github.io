@@ -110,16 +110,17 @@ onBeforeUnmount(() => {
   filter: blur(100px);
 }
 
+/* 两个柔光斑,给背景加点层次 —— 颜色取自四种配色 */
 .site-bg__blob--a {
   top: -14%;
   left: -12%;
-  background: rgba(255, 255, 255, 0.45);
+  background: rgba(247, 201, 212, 0.55);
 }
 
 .site-bg__blob--b {
   right: -12%;
   bottom: -14%;
-  background: rgba(129, 140, 248, 0.38);
+  background: rgba(46, 125, 107, 0.22);
 }
 
 @media (prefers-reduced-motion: reduce) {
