@@ -26,9 +26,6 @@ export default defineConfig({
   },
 
   themeConfig: {
-    // 顶栏站名前面那朵山茶花
-    logo: '/camellia.svg',
-
     nav: [
       { text: '首页', link: '/' },
       { text: '笔记', link: '/notes/' },

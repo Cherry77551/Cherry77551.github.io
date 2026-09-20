@@ -54,18 +54,61 @@ docs/
 ├─ .vitepress/
 │  ├─ config.mts        # 导航、侧边栏、站点信息
 │  └─ theme/
-│     ├─ index.ts         # 主题入口(注册首页组件)
-│     ├─ SplitHome.vue    # 首页那两块大的「笔记 / 项目」入口
-│     └─ custom.css       # 淡绿色主题 + 背景图(改配色就看这个文件)
+│     ├─ index.ts          # 主题入口
+│     ├─ Layout.vue        # 包一层,给所有页面加背景层
+│     ├─ SiteBackground.vue # 全屏背景:照片轮播 + 磨砂 + 靛紫渐变
+│     ├─ SplitHome.vue     # 首页仪表盘
+│     ├─ home.config.ts    # ★ 首页内容配置(改这里就够了)
+│     └─ custom.css        # 玻璃拟态 + 配色(改主色看这里)
 ├─ index.md             # 首页
 ├─ about.md             # 关于
 ├─ notes/               # 笔记
 │  └─ dotnet/          #   C# 笔记(为 Unity 准备,8 篇)
 ├─ projects/            # 项目
 └─ public/              # 静态文件,原样复制到网站根目录
-   ├─ bg.svg            # 默认背景图(换成自己的就是改这里)
+   ├─ bg.svg            # 默认背景图(换成自己的照片)
    └─ favicon.svg       # 浏览器标签页图标
 ```
+
+## 图片怎么放(重点)
+
+**所有图片都放在 `docs/public/` 目录里。** 引用时以 `/` 开头,把 `docs/public/` 这个前缀去掉:
+
+| 文件实际位置 | 引用时写 |
+| --- | --- |
+| `docs/public/img/avatar.jpg` | `/img/avatar.jpg` |
+| `docs/public/bg-1.jpg` | `/bg-1.jpg` |
+| `docs/public/img/cover/notes.png` | `/img/cover/notes.png` |
+
+> 常见错误:写成 `img/avatar.jpg`(少了开头的斜杠)或 `docs/public/img/avatar.jpg`(多带了前缀),
+> 都会变成破图。
+
+**首页的图和文字全部在 `docs/.vitepress/theme/home.config.ts` 里改**(不用碰组件代码):
+
+```ts
+export const homeConfig = {
+  // 背景图:放几张贴几张,自动轮播
+  backgroundImages: ['/img/bg-1.jpg', '/img/bg-2.jpg'],
+
+  profile: {
+    name: '乌鸦张嘴',
+    avatar: '/img/avatar.jpg',   // 留空 '' 会显示名字首字
+    bio: '……',
+    stats: [...],
+    links: [...],
+  },
+
+  entries: [
+    { title: '笔记', desc: '…', link: '/notes/', cover: '/img/cover-notes.jpg', tag: 'Notes' },
+    { title: '项目', desc: '…', link: '/projects/', cover: '/img/cover-projects.jpg', tag: 'Projects' },
+  ],
+}
+```
+
+**压缩很重要**:照片压到 300KB 以内、背景图 500KB 以内再放进来,不然首页打开要等很久。
+在线压图工具搜「squoosh」就行。
+
+留空字符串 `''` 也没事 —— 会用内置的靛紫渐变兜底,不会出现破图。
 
 ## 改配色
 
@@ -73,37 +116,29 @@ docs/
 
 ```css
 :root {
-  --vp-c-brand-1: #3f9d6d;   /* 链接、文字高亮 */
-  --vp-c-brand-2: #348a5f;   /* 悬浮 */
-  --vp-c-brand-3: #54b380;   /* 主按钮背景 */
-  --vp-c-bg: rgba(247, 251, 248, 0.86);   /* 页面底色(半透明,让背景图透出来) */
-  --vp-c-bg-alt: rgba(237, 245, 240, 0.9);
-  --vp-c-divider: #dbeade;   /* 分隔线 */
+  --brand: #4f46e5;          /* 链接、高亮 */
+  --brand-2: #6366f1;        /* 主按钮 */
+  --brand-3: #a855f7;        /* 渐变用的紫 */
+  --glass: rgba(255,255,255,0.45);   /* 玻璃卡片底色 */
+  --glass-blur: blur(16px) saturate(150%);
 }
 ```
 
-`.dark { ... }` 里是深色模式的对应值。
+## 改字体
 
-## 换背景图
+默认正文是衬线体(宋体系),跟参考站一致。想换成无衬线,改 `custom.css` 里这一行:
 
-1. 把你的图片放进 `docs/public/`,例如 `docs/public/bg.jpg`
-2. 打开 `docs/.vitepress/theme/custom.css`,把这一行改掉:
+```css
+--vp-font-family-base: var(--site-font-sans);
+```
 
-   ```css
-   --site-bg-image: url('/bg.jpg');
-   ```
+## 换背景(免费)
 
-   路径以 `/` 开头,对应的是 `docs/public/` 目录。
+背景照片和轮播都在 `docs/.vitepress/theme/home.config.ts` 的 `backgroundImages` 里改。
+磨砂强度、渐变遮罩在 `SiteBackground.vue` 里的一条对应样式,想调淡调浓改 `--site-bg-veil`
+那个数字(`SiteBackground.vue` 里的 `.site-bg__veil` 的 `background` 那行)。
 
-3. 想让图片更明显 / 更淡,调 `--site-bg-veil`(遮罩不透明度),数值越小图越清楚:
-
-   ```css
-   --site-bg-veil: rgba(247, 251, 248, 0.45);
-   ```
-
-4. 不想要背景图就写 `--site-bg-image: none;`
-
-> 图片建议先在别处压缩到 300KB 以内再放进来,不然打开会慢。
+不放任何背景图也行,会显示内置的靛紫渐变。
 
 
 ## 上线部署(只需要做一次)
@@ -157,10 +192,9 @@ cat ~/.ssh/id_ed25519.pub                  # 把输出粘到 GitHub → Settings
 - [x] `docs/about.md`、`docs/projects/*.md` 里的 GitHub 链接(已填 `Cherry77551`)
 - [x] `docs/.vitepress/config.mts` 里的 footer 名字
 - [x] 站点名称/昵称:现在是 `乌鸦张嘴`,在 `docs/.vitepress/config.mts` 的 `title` 和 `footer.copyright`,以及 `docs/about.md` 的自我介绍
-- [ ] 换背景图:`docs/public/` 里放图,改 `custom.css` 的 `--site-bg-image`(见上面「换背景图」)
-- [ ] `docs/public/favicon.svg` 想换的话直接替换文件
-- [ ] 山茶花图标:`docs/public/camellia.svg`,顶栏那个由 `config.mts` 的 `themeConfig.logo` 指定
-- [ ] 首页那两块入口的文字在 `docs/.vitepress/theme/SplitHome.vue` 里的 `panels`
+- [ ] **首页的头像、简介、统计数字、入口封面图** —— 全在 `docs/.vitepress/theme/home.config.ts`
+- [ ] **背景照片** —— 放 `docs/public/img/`,写进 `home.config.ts` 的 `backgroundImages`
+- [ ] `docs/public/favicon.svg` 想换的话直接替换文件(现在是靛紫渐变 + 一个「鸦」字)
 - [ ] 想公开邮箱的话,加在 `docs/about.md` 的联系方式里
 
 ## 后面可以加的

@@ -1,384 +1,672 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useData, withBase } from 'vitepress'
+import { homeConfig } from './home.config'
+import SiteBackground from './SiteBackground.vue'
 
 const { site, theme } = useData()
 
 const title = computed(() => site.value.title)
 const nav = computed(() => (theme.value.nav ?? []).filter((i: any) => i.link))
 
-const panels = [
-  { text: '笔记', sub: '学习记录与技术整理', link: '/notes/', tone: 'green' },
-  { text: '项目', sub: '做过的东西与源码', link: '/projects/', tone: 'mint' },
-]
+const profile = homeConfig.profile
+const entries = homeConfig.entries
+const statusBar = homeConfig.statusBar
+
+const initial = computed(() => (profile.name || '?').trim().charAt(0))
+
+/* ---------------- 状态栏时钟 ---------------- */
+const now = ref('')
+let timer: number | undefined
+
+function tick() {
+  const d = new Date()
+  const p = (n: number) => String(n).padStart(2, '0')
+  now.value = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
+onMounted(() => {
+  if (!statusBar.clock) return
+  tick()
+  timer = window.setInterval(tick, 1000)
+})
+
+onBeforeUnmount(() => {
+  if (timer) window.clearInterval(timer)
+})
 </script>
 
 <template>
   <div class="home">
-    <div class="home__bloom" aria-hidden="true"></div>
+    <SiteBackground />
 
-    <header class="home__bar">
-      <a class="home__brand" :href="withBase('/')">
-        <span class="home__mark" aria-hidden="true"></span>
-        <span>{{ title }}</span>
-      </a>
-      <nav class="home__nav">
-        <a v-for="item in nav" :key="item.link" :href="withBase(item.link)">{{ item.text }}</a>
-      </nav>
+    <!-- ---------------- 顶栏 ---------------- -->
+    <header class="hdr">
+      <div class="hdr__inner">
+        <a class="hdr__brand" :href="withBase('/')">{{ title }}</a>
+        <nav class="hdr__nav">
+          <a
+            v-for="item in nav"
+            :key="item.link"
+            :href="withBase(item.link)"
+            :class="{ 'is-active': withBase(item.link) === withBase('/') }"
+          >
+            {{ item.text }}
+          </a>
+        </nav>
+      </div>
     </header>
 
-    <main class="home__main">
-      <div class="home__welcome">
-        <span class="home__badge" aria-hidden="true"></span>
-        <p class="home__hello">今天想看点什么?</p>
+    <main class="main">
+      <div class="grid">
+        <!-- ---------------- 个人卡片 ---------------- -->
+        <section class="card card--profile">
+          <div class="profile">
+            <div class="profile__avatar">
+              <img v-if="profile.avatar" :src="withBase(profile.avatar)" :alt="profile.name" />
+              <span v-else class="profile__initial">{{ initial }}</span>
+            </div>
+
+            <div class="profile__text">
+              <h1 class="profile__name">{{ profile.name }}</h1>
+              <p class="profile__bio">{{ profile.bio }}</p>
+            </div>
+          </div>
+
+          <div v-if="profile.stats?.length" class="stats">
+            <template v-for="(s, i) in profile.stats" :key="s.label">
+              <span v-if="i > 0" class="stats__sep" aria-hidden="true" />
+              <span class="stats__item">
+                <b class="stats__value">{{ s.value }}</b>
+                <i class="stats__label">{{ s.label }}</i>
+              </span>
+            </template>
+          </div>
+
+          <div v-if="profile.links?.length" class="links">
+            <a
+              v-for="l in profile.links"
+              :key="l.href"
+              class="links__btn"
+              :href="l.href"
+              target="_blank"
+              rel="noopener noreferrer"
+              :title="l.label"
+              :aria-label="l.label"
+            >
+              <svg v-if="l.icon === 'github'" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.564 9.564 0 0 1 12 6.844c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.379.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.161 22 16.418 22 12c0-5.523-4.477-10-10-10z" />
+              </svg>
+              <svg v-else-if="l.icon === 'mail'" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="5" width="18" height="14" rx="3" />
+                <path d="m3.5 8 7.6 5.1a1.6 1.6 0 0 0 1.8 0L20.5 8" />
+              </svg>
+              <svg v-else viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07L11.4 4.5" />
+                <path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 0 0 7.07 7.07L12.6 19.5" />
+              </svg>
+            </a>
+          </div>
+        </section>
+
+        <!-- ---------------- 入口大卡 ---------------- -->
+        <div class="entries">
+          <a
+            v-for="entry in entries"
+            :key="entry.link"
+            class="card card--entry"
+            :class="{ 'has-cover': !!entry.cover }"
+            :href="withBase(entry.link)"
+          >
+            <span
+              v-if="entry.cover"
+              class="entry__cover"
+              :style="{ backgroundImage: `url('${withBase(entry.cover)}')` }"
+              aria-hidden="true"
+            />
+            <span class="entry__scrim" aria-hidden="true" />
+
+            <span class="entry__body">
+              <span v-if="entry.tag" class="entry__tag">{{ entry.tag }}</span>
+              <span class="entry__title">{{ entry.title }}</span>
+              <span class="entry__desc">{{ entry.desc }}</span>
+            </span>
+
+            <span class="entry__arrow" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M5 12h14M13 6l6 6-6 6" />
+              </svg>
+            </span>
+          </a>
+        </div>
+
+        <!-- ---------------- 状态栏 ---------------- -->
+        <div class="card card--status">
+          <div v-if="statusBar.clock" class="clock">{{ now }}</div>
+
+          <div class="status__meta">
+            <span class="status__note">{{ statusBar.note }}</span>
+            <span class="status__badges">
+              <span v-for="b in statusBar.badges" :key="b" class="badge">{{ b }}</span>
+            </span>
+          </div>
+        </div>
       </div>
-
-      <a
-        v-for="panel in panels"
-        :key="panel.link"
-        class="card"
-        :href="withBase(panel.link)"
-      >
-        <span class="card__icon" :class="`card__icon--${panel.tone}`" aria-hidden="true">
-          <svg v-if="panel.tone === 'green'" viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="4" y="3" width="16" height="18" rx="4.5" />
-            <path d="M8.5 9h7M8.5 13h7M8.5 17h4" />
-          </svg>
-          <svg v-else viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="8" height="8" rx="2.5" />
-            <rect x="13" y="13" width="8" height="8" rx="2.5" />
-            <path d="M13 7h3.5A4.5 4.5 0 0 1 21 11.5V13" />
-          </svg>
-        </span>
-
-        <span class="card__body">
-          <span class="card__text">{{ panel.text }}</span>
-          <span class="card__sub">{{ panel.sub }}</span>
-        </span>
-
-        <span class="card__arrow" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M5 12h14M13 6l6 6-6 6" />
-          </svg>
-        </span>
-      </a>
     </main>
   </div>
 </template>
 
 <style scoped>
 .home {
-  position: relative;
-  display: flex;
-  flex-direction: column;
   min-height: 100vh;
-  overflow: hidden;
-}
-
-/* 背景里那朵很淡的山茶花 */
-.home__bloom {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: min(78vw, 520px);
-  aspect-ratio: 1;
-  transform: translate(-50%, -48%);
-  background: url('/camellia.svg') center / contain no-repeat;
-  opacity: 0.05;
-  pointer-events: none;
+  padding-bottom: 48px;
 }
 
 /* ---------------- 顶栏 ---------------- */
-.home__bar {
-  position: relative;
-  z-index: 1;
-  flex: 0 0 auto;
+.hdr {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: rgba(255, 255, 255, 0.42);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.hdr__inner {
+  width: 90%;
+  max-width: 1120px;
+  margin: 0 auto;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  height: 68px;
-  padding: 0 28px;
-  background-color: var(--k-surface);
-  border-bottom: 2px solid var(--k-border);
+  gap: 20px;
 }
 
-.home__brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--k-text);
+.hdr__brand {
+  font-family: var(--site-font-serif);
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: #1e293b;
   text-decoration: none;
-  transition: color var(--k-dur) var(--k-ease);
+  transition: color 0.3s;
 }
 
-.home__brand:hover {
-  color: var(--k-green-deep);
+.hdr__brand:hover {
+  color: #4f46e5;
 }
 
-.home__mark {
-  flex: 0 0 auto;
-  width: 26px;
-  height: 26px;
-  background: url('/camellia.svg') center / contain no-repeat;
-  transition: transform var(--k-dur) var(--k-ease);
-}
-
-.home__brand:hover .home__mark {
-  transform: scale(1.15, 0.92);
-}
-
-.home__nav {
+.hdr__nav {
   display: flex;
-  gap: 6px;
+  gap: 26px;
 }
 
-.home__nav a {
-  padding: 7px 16px;
-  border-radius: var(--k-r-full);
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--k-text-2);
-  text-decoration: none;
-  transition: background-color var(--k-dur) var(--k-ease),
-    color var(--k-dur) var(--k-ease), transform var(--k-dur) var(--k-ease);
-}
-
-.home__nav a:hover {
-  color: var(--k-green-deep);
-  background-color: rgba(167, 224, 191, 0.35);
-  transform: scale(1.06, 1.12);
-}
-
-.home__nav a:active {
-  transform: scale(0.94);
-}
-
-/* ---------------- 主体 ---------------- */
-.home__main {
+.hdr__nav a {
   position: relative;
-  z-index: 1;
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  padding: 40px 24px 104px;
-}
-
-.home__welcome {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 14px;
-}
-
-/* 山茶花放在一个粉彩圆底里 */
-.home__badge {
-  width: 82px;
-  height: 82px;
-  border-radius: var(--k-r-full);
-  background-color: var(--k-green);
-  background-image: url('/camellia.svg');
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: 58px 58px;
-  box-shadow: var(--k-shadow-md);
-}
-
-.home__hello {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--k-text-2);
-}
-
-/* ---------------- 卡片 ---------------- */
-.card {
-  width: 100%;
-  max-width: 460px;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  padding: 22px 24px;
-  border: 2px solid var(--k-border);
-  border-radius: var(--k-r);
-  background-color: var(--k-surface);
-  box-shadow: var(--k-shadow-md);
+  font-family: var(--site-font-serif);
+  font-size: 14px;
+  font-weight: 700;
+  color: #334155;
   text-decoration: none;
-  transition: transform var(--k-dur) var(--k-ease),
-    box-shadow var(--k-dur) var(--k-ease),
-    border-color var(--k-dur) var(--k-ease);
+  transition: color 0.3s;
 }
 
-/* Cloud Lift + 果冻微挤压 */
-.card:hover {
-  border-color: var(--k-border-strong);
-  box-shadow: var(--k-shadow-lg);
-  transform: translateY(-6px) scale(1.022, 1.04);
+.hdr__nav a:hover,
+.hdr__nav a.is-active {
+  color: #4f46e5;
 }
 
-.card:active {
-  transform: translateY(-1px) scale(0.955);
-  box-shadow: var(--k-shadow-sm);
+.hdr__nav a.is-active::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #6366f1;
+  transform: translateX(-50%);
 }
 
-.card__icon {
-  flex: 0 0 auto;
+/* ---------------- 布局 ---------------- */
+.main {
+  width: 90%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-top: 104px;
+}
+
+.grid {
   display: grid;
-  place-items: center;
-  width: 54px;
-  height: 54px;
-  border-radius: var(--k-r-full);
-  color: #1d5f40;
-  transition: transform var(--k-dur) var(--k-ease);
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 24px;
 }
 
-.card__icon svg {
-  width: 27px;
-  height: 27px;
+/* ---------------- 玻璃卡片 ---------------- */
+.card {
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow: 0 10px 30px -12px rgba(15, 23, 42, 0.22);
 }
 
-.card__icon--green {
-  background-color: var(--k-green);
-}
-
-.card__icon--mint {
-  background-color: var(--k-mint);
-}
-
-/* 图标做挤压回弹,文字不动 —— 软糯感主要来自这里 */
-.card:hover .card__icon {
-  transform: scale(1.14, 0.9);
-}
-
-.card:active .card__icon {
-  transform: scale(0.88, 1.08);
-}
-
-.card__body {
+/* ---------------- 个人卡片 ---------------- */
+.card--profile {
+  grid-column: span 7;
+  padding: 32px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  transition: transform 0.5s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.card--profile:hover {
+  transform: scale(1.008);
+}
+
+.profile {
+  display: flex;
+  align-items: center;
+  gap: 22px;
   min-width: 0;
-  flex: 1 1 auto;
 }
 
-.card__text {
-  font-size: clamp(1.45rem, 4vw, 1.9rem);
-  font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: 0.06em;
-  color: var(--k-text);
-  transition: color var(--k-dur) var(--k-ease);
-}
-
-.card:hover .card__text {
-  color: var(--k-green-deep);
-}
-
-.card__sub {
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.05em;
-  color: var(--k-text-3);
-}
-
-.card__arrow {
+.profile__avatar {
   flex: 0 0 auto;
+  width: 92px;
+  height: 92px;
+  border-radius: 20px;
+  padding: 3px;
+  background: linear-gradient(135deg, #6366f1, #a855f7);
+  box-shadow: 0 8px 20px -8px rgba(99, 102, 241, 0.6);
+}
+
+.profile__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 17px;
+  background: #fff;
+  display: block;
+}
+
+.profile__initial {
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
-  border-radius: var(--k-r-full);
-  background-color: rgba(167, 224, 191, 0.4);
-  color: var(--k-green-deep);
-  transition: transform var(--k-dur) var(--k-ease),
-    background-color var(--k-dur) var(--k-ease);
+  width: 100%;
+  height: 100%;
+  border-radius: 17px;
+  background: #fff;
+  font-family: var(--site-font-serif);
+  font-size: 38px;
+  font-weight: 900;
+  color: #4f46e5;
 }
 
-.card__arrow svg {
+.profile__text {
+  min-width: 0;
+}
+
+.profile__name {
+  margin: 0 0 8px;
+  font-family: var(--site-font-serif);
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+  color: #0f172a;
+}
+
+.profile__bio {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.75;
+  color: #475569;
+}
+
+.stats {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-top: 28px;
+}
+
+.stats__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.stats__value {
+  font-family: var(--site-font-serif);
+  font-size: 24px;
+  font-weight: 900;
+  color: #4f46e5;
+  line-height: 1.1;
+}
+
+.stats__label {
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #64748b;
+}
+
+.stats__sep {
+  width: 1px;
+  height: 30px;
+  background: rgba(100, 116, 139, 0.28);
+}
+
+.links {
+  display: flex;
+  gap: 10px;
+  margin-top: 28px;
+}
+
+.links__btn {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  color: #475569;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  transition: background-color 0.3s, color 0.3s, transform 0.3s;
+}
+
+.links__btn svg {
   width: 19px;
   height: 19px;
 }
 
-.card:hover .card__arrow {
-  background-color: var(--k-green);
-  transform: translateX(5px) scale(1.08, 0.95);
+.links__btn:hover {
+  background: #6366f1;
+  color: #fff;
+  transform: translateY(-2px);
 }
 
-/* ---------------- 窄屏 ---------------- */
+/* ---------------- 入口卡 ---------------- */
+.entries {
+  grid-column: span 5;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.card--entry {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 150px;
+  display: flex;
+  align-items: flex-end;
+  padding: 24px;
+  overflow: hidden;
+  text-decoration: none;
+  transition: transform 0.5s cubic-bezier(0.33, 1, 0.68, 1), box-shadow 0.5s;
+}
+
+/* 没封面图时的渐变兜底 */
+.card--entry::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, #818cf8, #c084fc);
+  opacity: 0.9;
+}
+
+.card--entry.has-cover::before {
+  background: #1e293b;
+  opacity: 0;
+}
+
+.entry__cover {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  transition: transform 1s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.entry__scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(15, 23, 42, 0.78), rgba(15, 23, 42, 0.12));
+}
+
+.card--entry:hover {
+  transform: scale(1.02) translateY(-3px);
+  box-shadow: 0 18px 40px -14px rgba(79, 70, 229, 0.45);
+}
+
+.card--entry:hover .entry__cover {
+  transform: scale(1.06);
+}
+
+.entry__body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.entry__tag {
+  align-self: flex-start;
+  margin-bottom: 6px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.entry__title {
+  font-family: var(--site-font-serif);
+  font-size: 26px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.entry__desc {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.entry__arrow {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #fff;
+  transition: transform 0.4s, background-color 0.4s;
+}
+
+.entry__arrow svg {
+  width: 18px;
+  height: 18px;
+}
+
+.card--entry:hover .entry__arrow {
+  background: rgba(255, 255, 255, 0.4);
+  transform: translateX(4px);
+}
+
+/* ---------------- 状态栏 ---------------- */
+.card--status {
+  grid-column: span 12;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.clock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 30px;
+  background: rgba(15, 23, 42, 0.88);
+  color: #fff;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.status__meta {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 16px 24px;
+}
+
+.status__note {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.status__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.badge {
+  padding: 5px 11px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+}
+
+/* ---------------- 响应式 ---------------- */
+@media (max-width: 960px) {
+  .card--profile,
+  .entries {
+    grid-column: span 12;
+  }
+}
+
 @media (max-width: 640px) {
-  .home__bar {
-    height: 58px;
-    padding: 0 16px;
-    gap: 12px;
+  .hdr__inner {
+    height: 56px;
   }
 
-  .home__nav {
-    gap: 2px;
+  .hdr__brand {
+    font-size: 17px;
   }
 
-  .home__nav a {
-    padding: 6px 10px;
+  .hdr__nav {
+    gap: 14px;
+  }
+
+  .hdr__nav a {
     font-size: 13px;
   }
 
-  .home__main {
-    gap: 14px;
-    padding: 28px 18px 76px;
+  .main {
+    padding-top: 84px;
   }
 
-  .home__badge {
+  .grid {
+    gap: 16px;
+  }
+
+  .entries {
+    gap: 16px;
+  }
+
+  .card--profile {
+    padding: 22px;
+  }
+
+  .profile {
+    gap: 16px;
+  }
+
+  .profile__avatar {
     width: 68px;
     height: 68px;
-    background-size: 48px 48px;
+    border-radius: 16px;
   }
 
-  .card {
+  .profile__initial {
+    border-radius: 13px;
+    font-size: 28px;
+  }
+
+  .stats {
     gap: 14px;
-    padding: 18px 18px;
+    margin-top: 20px;
   }
 
-  .card__icon {
-    width: 46px;
-    height: 46px;
+  .links {
+    margin-top: 20px;
   }
 
-  .card__icon svg {
-    width: 23px;
-    height: 23px;
+  .card--entry {
+    min-height: 132px;
+    padding: 18px;
   }
 
-  .card__arrow {
-    width: 32px;
-    height: 32px;
+  .card--status {
+    flex-direction: column;
+  }
+
+  .clock {
+    font-size: 20px;
+    padding: 12px 20px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .card,
-  .card__icon,
-  .card__arrow,
-  .home__mark,
-  .home__nav a {
+  .card--entry,
+  .entry__cover,
+  .entry__arrow,
+  .links__btn {
     transition: none;
   }
 
-  .card:hover,
-  .card:active,
-  .card:hover .card__icon,
-  .card:active .card__icon,
-  .card:hover .card__arrow,
-  .home__nav a:hover,
-  .home__brand:hover .home__mark {
+  .card--profile:hover,
+  .card--entry:hover,
+  .card--entry:hover .entry__cover,
+  .links__btn:hover {
     transform: none;
   }
 }
