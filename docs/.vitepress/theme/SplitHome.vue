@@ -140,23 +140,26 @@ function entryStyle(i: number) {
             </span>
           </a>
         </div>
+      </div>
 
-        <!-- ---------------- 底部状态栏(没有时钟) ---------------- -->
-        <div class="card card--status">
-          <span class="status__note">{{ statusBar.note }}</span>
-          <span class="status__badges">
-            <span v-for="b in statusBar.badges" :key="b" class="badge">{{ b }}</span>
-          </span>
-        </div>
+      <!-- ---------------- 底部状态栏(贴在页面最底下) ---------------- -->
+      <div class="card card--status">
+        <span class="status__note">{{ statusBar.note }}</span>
+        <span class="status__badges">
+          <span v-for="b in statusBar.badges" :key="b" class="badge">{{ b }}</span>
+        </span>
       </div>
     </main>
   </div>
 </template>
 
 <style scoped>
+/* 整页做成竖向 flex,让 main 撑满剩余高度,状态栏才能被推到最底下 */
 .home {
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
-  padding-bottom: 48px;
+  padding-bottom: 32px;
 }
 
 /* ---------------- 顶栏 ---------------- */
@@ -231,7 +234,11 @@ function entryStyle(i: number) {
 }
 
 /* ---------------- 布局 ---------------- */
+/* main 撑满 home 的剩余高度,内部也是竖向 flex */
 .main {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
   width: 90%;
   max-width: 1120px;
   margin: 0 auto;
@@ -242,6 +249,8 @@ function entryStyle(i: number) {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 24px;
+  /* 给状态栏留一段最小间距 */
+  margin-bottom: 24px;
 }
 
 /* ---------------- 玻璃卡片 ---------------- */
@@ -540,7 +549,9 @@ function entryStyle(i: number) {
 
 /* ---------------- 底部状态栏 ---------------- */
 .card--status {
-  grid-column: span 12;
+  /* margin-top: auto 会吃掉所有剩余空间,把这块推到页面最底下 */
+  margin-top: auto;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
