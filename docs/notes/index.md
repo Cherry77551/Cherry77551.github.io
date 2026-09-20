@@ -1,6 +1,6 @@
 # 笔记
 
-这里按主题整理我平时记的笔记。左边侧栏可以直接跳转。
+这里按主题整理我平时记的笔记。
 
 ## 目录
 
@@ -23,13 +23,6 @@
 | 7 | [异步编程与并发](./dotnet/async.md) | `async`/`await` 原理、取消、协程与 `Awaitable` |
 | 8 | [内存、GC 与性能](./dotnet/memory-performance.md) | Unity 的 GC 模型、`IDisposable`、`Span<T>`、零分配 |
 
-### Linux 与工具
-
-- [WSL 常用技巧](./linux/wsl-tips.md) —— 在 Windows 上用 Linux 开发的一些经验
-
-### 前端
-
-- [CSS 布局笔记](./web/css-layout.md) —— Flex / Grid 的常用写法速查
 
 ---
 
