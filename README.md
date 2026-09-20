@@ -161,6 +161,7 @@ cat ~/.ssh/id_ed25519.pub                  # 把输出粘到 GitHub → Settings
 - [x] 站点名称/昵称:现在是 `乌鸦张嘴`,在 `docs/.vitepress/config.mts` 的 `title` 和 `footer.copyright`,以及 `docs/about.md` 的自我介绍
 - [ ] 换背景图:`docs/public/` 里放图,改 `custom.css` 的 `--site-bg-image`(见上面「换背景图」)
 - [ ] `docs/public/favicon.svg` 想换的话直接替换文件
+- [ ] 山茶花图标:`docs/public/camellia.svg`,顶栏那个由 `config.mts` 的 `themeConfig.logo` 指定
 - [ ] 首页那两块入口的文字在 `docs/.vitepress/theme/SplitHome.vue` 里的 `panels`
 - [ ] 想公开邮箱的话,加在 `docs/about.md` 的联系方式里
 

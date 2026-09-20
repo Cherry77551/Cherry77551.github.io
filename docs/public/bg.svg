@@ -8,10 +8,33 @@
       <stop offset="0" stop-color="#bde5cf"/>
       <stop offset="1" stop-color="#eef8f1" stop-opacity="0"/>
     </radialGradient>
+
+    <g id="camellia">
+      <g fill="#ffffff" stroke="#8fd0aa" stroke-width="3" stroke-linejoin="round">
+        <ellipse cx="0" cy="-24" rx="13" ry="19" transform="rotate(0)"/>
+        <ellipse cx="0" cy="-24" rx="13" ry="19" transform="rotate(72)"/>
+        <ellipse cx="0" cy="-24" rx="13" ry="19" transform="rotate(144)"/>
+        <ellipse cx="0" cy="-24" rx="13" ry="19" transform="rotate(216)"/>
+        <ellipse cx="0" cy="-24" rx="13" ry="19" transform="rotate(288)"/>
+      </g>
+      <g fill="#ffffff" stroke="#8fd0aa" stroke-width="3" stroke-linejoin="round">
+        <ellipse cx="0" cy="-17" rx="9.5" ry="14" transform="rotate(36)"/>
+        <ellipse cx="0" cy="-17" rx="9.5" ry="14" transform="rotate(108)"/>
+        <ellipse cx="0" cy="-17" rx="9.5" ry="14" transform="rotate(180)"/>
+        <ellipse cx="0" cy="-17" rx="9.5" ry="14" transform="rotate(252)"/>
+        <ellipse cx="0" cy="-17" rx="9.5" ry="14" transform="rotate(324)"/>
+      </g>
+      <circle r="6.5" fill="#e9c46a"/>
+    </g>
   </defs>
+
   <rect width="1600" height="1000" fill="#f2faf5"/>
   <rect width="1600" height="1000" fill="url(#g1)"/>
   <rect width="1600" height="1000" fill="url(#g2)"/>
   <circle cx="1290" cy="170" r="230" fill="#b9e4cc" opacity="0.4"/>
   <circle cx="230" cy="830" r="320" fill="#a9dcc0" opacity="0.32"/>
+
+  <use href="#camellia" transform="translate(1330,200) scale(2.4)" opacity="0.14"/>
+  <use href="#camellia" transform="translate(250,790) scale(1.6)" opacity="0.11"/>
+  <use href="#camellia" transform="translate(840,110) scale(0.85)" opacity="0.09"/>
 </svg>

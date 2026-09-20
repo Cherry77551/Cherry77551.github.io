@@ -14,48 +14,70 @@ const panels = [
 </script>
 
 <template>
-  <div class="split-home">
-    <header class="split-home__bar">
-      <a class="split-home__brand" :href="withBase('/')">{{ title }}</a>
-      <nav class="split-home__nav">
+  <div class="home">
+    <div class="home__bloom" aria-hidden="true"></div>
+
+    <header class="home__bar">
+      <a class="home__brand" :href="withBase('/')">
+        <span class="home__mark" aria-hidden="true"></span>
+        <span>{{ title }}</span>
+      </a>
+      <nav class="home__nav">
         <a v-for="item in nav" :key="item.link" :href="withBase(item.link)">{{ item.text }}</a>
       </nav>
     </header>
 
-    <main class="split-home__panels">
+    <main class="home__main">
       <a
         v-for="panel in panels"
         :key="panel.link"
-        class="split-panel"
+        class="card"
         :href="withBase(panel.link)"
       >
-        <span class="split-panel__row">
-          <span class="split-panel__text">{{ panel.text }}</span>
-          <svg class="split-panel__arrow" viewBox="0 0 48 18" aria-hidden="true">
-            <path
-              d="M1 9h43M36 2l7 7-7 7"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
+        <span class="card__body">
+          <span class="card__text">{{ panel.text }}</span>
+          <span class="card__sub">{{ panel.sub }}</span>
         </span>
-        <span class="split-panel__sub">{{ panel.sub }}</span>
+        <svg class="card__arrow" viewBox="0 0 48 18" aria-hidden="true">
+          <path
+            d="M1 9h43M36 2l7 7-7 7"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
       </a>
     </main>
   </div>
 </template>
 
 <style scoped>
-.split-home {
+.home {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  overflow: hidden;
 }
 
-.split-home__bar {
+/* 背景里那朵很淡的山茶花 */
+.home__bloom {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(80vw, 560px);
+  aspect-ratio: 1;
+  transform: translate(-50%, -48%);
+  background: url('/camellia.svg') center / contain no-repeat;
+  opacity: 0.06;
+  pointer-events: none;
+}
+
+.home__bar {
+  position: relative;
+  z-index: 1;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
@@ -65,7 +87,10 @@ const panels = [
   padding: 0 28px;
 }
 
-.split-home__brand {
+.home__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -74,138 +99,137 @@ const panels = [
   transition: color 0.25s;
 }
 
-.split-home__brand:hover {
+.home__brand:hover {
   color: var(--vp-c-brand-1);
 }
 
-.split-home__nav {
+.home__mark {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  background: url('/camellia.svg') center / contain no-repeat;
+}
+
+.home__nav {
   display: flex;
   gap: 22px;
 }
 
-.split-home__nav a {
+.home__nav a {
   font-size: 14px;
   color: var(--vp-c-text-2);
   text-decoration: none;
   transition: color 0.25s;
 }
 
-.split-home__nav a:hover {
+.home__nav a:hover {
   color: var(--vp-c-brand-1);
 }
 
-.split-home__panels {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr;
-  gap: 1px;
-  background-color: var(--vp-c-divider);
-  border-top: 1px solid var(--vp-c-divider);
-}
-
-.split-panel {
+/* 两块入口:居中、上下排列 */
+.home__main {
   position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
+  align-items: center;
   justify-content: center;
-  padding: 40px clamp(28px, 6vw, 88px);
-  text-decoration: none;
-  background-color: color-mix(in srgb, var(--vp-c-bg) 55%, transparent);
-  overflow: hidden;
+  gap: 18px;
+  padding: 32px 24px 96px;
 }
 
-.split-panel::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, transparent 20%, var(--vp-c-brand-soft));
-  opacity: 0;
-  transition: opacity 0.4s ease;
-}
-
-.split-panel:hover::before {
-  opacity: 1;
-}
-
-.split-panel__row {
-  position: relative;
+.card {
+  width: 100%;
+  max-width: 430px;
   display: flex;
   align-items: center;
-  gap: clamp(14px, 2.5vw, 32px);
+  justify-content: space-between;
+  gap: 20px;
+  padding: 24px 30px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 16px;
+  background-color: color-mix(in srgb, var(--vp-c-bg) 76%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  text-decoration: none;
+  transition: border-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
 }
 
-.split-panel__text {
-  font-size: clamp(3rem, 7.5vw, 6rem);
+.card:hover {
+  border-color: var(--vp-c-brand-3);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 28px -14px rgba(63, 157, 109, 0.5);
+}
+
+.card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.card__text {
+  font-size: clamp(1.6rem, 4.5vw, 2.25rem);
   font-weight: 700;
-  line-height: 1.05;
+  line-height: 1.15;
   letter-spacing: 0.08em;
   color: var(--vp-c-text-1);
-  transition: color 0.3s ease, transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.split-panel:hover .split-panel__text {
-  color: var(--vp-c-brand-1);
-  transform: translateX(8px);
-}
-
-.split-panel__arrow {
-  flex: 0 0 auto;
-  width: clamp(38px, 5vw, 74px);
-  height: auto;
-  color: var(--vp-c-brand-1);
-  opacity: 0.45;
-  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease;
-}
-
-.split-panel:hover .split-panel__arrow {
-  transform: translateX(14px);
-  opacity: 1;
-}
-
-.split-panel__sub {
-  position: relative;
-  margin-top: 18px;
-  font-size: 14px;
-  letter-spacing: 0.14em;
-  color: var(--vp-c-text-3);
   transition: color 0.3s ease;
 }
 
-.split-panel:hover .split-panel__sub {
-  color: var(--vp-c-text-2);
+.card:hover .card__text {
+  color: var(--vp-c-brand-1);
 }
 
-@media (max-width: 767px) {
-  .split-home__bar {
+.card__sub {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: var(--vp-c-text-3);
+}
+
+.card__arrow {
+  flex: 0 0 auto;
+  width: 34px;
+  height: auto;
+  color: var(--vp-c-brand-1);
+  opacity: 0.4;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease;
+}
+
+.card:hover .card__arrow {
+  transform: translateX(6px);
+  opacity: 1;
+}
+
+@media (max-width: 640px) {
+  .home__bar {
     height: 52px;
-    padding: 0 20px;
+    padding: 0 18px;
   }
 
-  .split-home__nav {
-    gap: 16px;
+  .home__nav {
+    gap: 14px;
   }
 
-  .split-home__panels {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr 1fr;
+  .home__main {
+    gap: 14px;
+    padding: 24px 18px 72px;
   }
 
-  .split-panel {
-    padding: 32px 24px;
+  .card {
+    padding: 20px 22px;
   }
 
-  .split-panel__sub {
-    margin-top: 12px;
-    font-size: 13px;
+  .card__arrow {
+    width: 26px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .split-panel__text,
-  .split-panel__arrow,
-  .split-panel::before {
+  .card,
+  .card__text,
+  .card__arrow {
     transition: none;
   }
 }
