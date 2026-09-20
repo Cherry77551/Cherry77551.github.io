@@ -10,6 +10,9 @@ export default defineConfig({
   // 这里要改成 base: '/<repo>/'
   base: '/',
 
+  // 规范要求「绝对禁止深色/黑色背景」,所以关掉深色模式开关
+  appearance: false,
+
   cleanUrls: true,
   lastUpdated: true,
 

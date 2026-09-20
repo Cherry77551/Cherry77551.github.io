@@ -1,87 +1,112 @@
 /**
- * 淡绿色主题 + 背景图
- * 改颜色 / 换背景图基本只要动这个文件最上面的变量
+ * Kawaii Minimal × 绿色调
+ * ---------------------------------------------------------------
+ * 原规范是 Tailwind 语法,这里是翻译过来的 CSS Token。
+ * 颜色保持绿色为主,山茶花(红花/黄蕊)作为唯一暖色点缀。
+ *
+ * 圆角对照:rounded-2xl = 16px   rounded-3xl = 24px   rounded-full = 9999px
+ * 交互:果冻挤压(非等比缩放)+ 轻盈上浮 + 软糯按压
  */
 
 :root {
   /* ============================================================
-     背景图
-     ------------------------------------------------------------
-     换图三步:
-     1. 把图片丢进 docs/public/,比如 docs/public/bg.jpg
-     2. 下面一行改成      --site-bg-image: url('/bg.jpg');
-     3. 不用背景图就写    --site-bg-image: none;
+     调色板
+     ============================================================ */
+  --k-bg: #f6fbf3;          /* 暖白偏绿(对应 bg-[#FFF7ED] 的角色) */
+  --k-surface: #ffffff;     /* 卡片 */
+  --k-surface-alt: #eff8ec; /* 次级面色 */
+
+  --k-green: #a7e0bf;       /* 主粉彩绿(对应 soft pink 的角色) */
+  --k-green-dim: #8fd6ac;   /* 悬浮态 */
+  --k-green-deep: #237a52;  /* 链接/文字用,对比度 5.0:1 */
+  --k-mint: #a9e7d8;        /* 次粉彩薄荷 */
+  --k-lime: #dcf2b0;        /* 三粉彩嫩绿 */
+  --k-yellow: #fde68a;      /* 强调粉彩黄 —— 和山茶花的花蕊同色 */
+
+  --k-border: #c7ebd5;      /* border-2 用的淡绿边框 */
+  --k-border-strong: #a7dbba;
+
+  --k-text: #1f2937;        /* gray-800 */
+  --k-text-2: #6b7280;      /* gray-500 */
+  --k-text-3: #9ca3af;      /* gray-400 */
+
+  /* 柔和阴影:带绿调,永远不用深色重阴影 */
+  --k-shadow-sm: 0 2px 8px rgba(110, 170, 135, 0.14);
+  --k-shadow-md: 0 6px 18px rgba(110, 170, 135, 0.18);
+  --k-shadow-lg: 0 14px 32px rgba(110, 170, 135, 0.24);
+
+  --k-ring: 0 0 0 4px rgba(167, 224, 191, 0.55);
+
+  /* 果冻回弹节奏(规范给的 token) */
+  --k-ease: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --k-dur: 240ms;
+
+  --k-r: 24px;    /* rounded-3xl */
+  --k-r-sm: 16px; /* rounded-2xl */
+  --k-r-full: 9999px;
+
+  /* ============================================================
+     背景图(想换就改这两行,见 README)
      ============================================================ */
   --site-bg-image: url('/bg.svg');
+  --site-bg-veil: rgba(246, 251, 243, 0.55);
 
-  /* 背景图上的遮罩,数值越不透明图片越淡(为了文字看得清) */
-  --site-bg-veil: rgba(247, 251, 248, 0.45);
+  /* ============================================================
+     映射到 VitePress 的变量
+     ============================================================ */
+  --vp-c-brand-1: var(--k-green-deep);
+  --vp-c-brand-2: #1d6845;
+  --vp-c-brand-3: var(--k-green);
+  --vp-c-brand-soft: rgba(167, 224, 191, 0.28);
 
-  /* ---------- 品牌色(链接 / 按钮 / 高亮) ---------- */
-  --vp-c-brand-1: #3f9d6d;
-  --vp-c-brand-2: #348a5f;
-  --vp-c-brand-3: #54b380;
-  --vp-c-brand-soft: rgba(84, 179, 128, 0.14);
+  --vp-c-tip-1: var(--k-green-deep);
+  --vp-c-tip-2: #1d6845;
+  --vp-c-tip-3: var(--k-green);
+  --vp-c-tip-soft: rgba(167, 224, 191, 0.22);
 
-  /* ---------- 提示块也用绿色系 ---------- */
-  --vp-c-tip-1: var(--vp-c-brand-1);
-  --vp-c-tip-2: var(--vp-c-brand-2);
-  --vp-c-tip-3: var(--vp-c-brand-3);
-  --vp-c-tip-soft: var(--vp-c-brand-soft);
+  --vp-c-bg: var(--k-bg);
+  --vp-c-bg-alt: var(--k-surface-alt);
+  --vp-c-bg-soft: #f1f9ee;
+  --vp-c-bg-elv: var(--k-surface);
+  --vp-c-divider: var(--k-border);
+  --vp-c-gutter: #e6f4e4;
 
-  /* ---------- 页面底色:半透明,让背景图透出来 ---------- */
-  --vp-c-bg: rgba(247, 251, 248, 0.86);
-  --vp-c-bg-alt: rgba(237, 245, 240, 0.9);
-  --vp-c-bg-soft: rgba(241, 248, 243, 0.88);
-  --vp-c-bg-elv: #ffffff;
-  --vp-c-divider: #dbeade;
-  --vp-c-gutter: #e8f2ea;
+  --vp-c-text-1: var(--k-text);
+  --vp-c-text-2: var(--k-text-2);
+  --vp-c-text-3: var(--k-text-3);
 
-  /* 顶栏 / 侧栏做成磨砂玻璃 */
-  --vp-nav-bg-color: rgba(247, 251, 248, 0.72);
-  --vp-sidebar-bg-color: rgba(237, 245, 240, 0.9);
+  --vp-nav-bg-color: var(--k-surface);
+  --vp-sidebar-bg-color: #eef8ea;
 
-  /* ---------- 按钮 ---------- */
+  /* 按钮:粉彩底 + 深绿字(保证 AA 对比度) */
   --vp-button-brand-border: transparent;
-  --vp-button-brand-text: #ffffff;
-  --vp-button-brand-bg: #54b380;
+  --vp-button-brand-text: #10361f;
+  --vp-button-brand-bg: var(--k-green);
   --vp-button-brand-hover-border: transparent;
-  --vp-button-brand-hover-text: #ffffff;
-  --vp-button-brand-hover-bg: #348a5f;
+  --vp-button-brand-hover-text: #10361f;
+  --vp-button-brand-hover-bg: var(--k-green-dim);
   --vp-button-brand-active-border: transparent;
-  --vp-button-brand-active-text: #ffffff;
-  --vp-button-brand-active-bg: #3f9d6d;
+  --vp-button-brand-active-text: #10361f;
+  --vp-button-brand-active-bg: #7fcd9e;
+
+  --vp-button-alt-border: 2px solid var(--k-border);
+  --vp-button-alt-text: var(--k-green-deep);
+  --vp-button-alt-bg: var(--k-surface);
+  --vp-button-alt-hover-border: 2px solid var(--k-border-strong);
+  --vp-button-alt-hover-text: var(--k-green-deep);
+  --vp-button-alt-hover-bg: #eef9ea;
+
+  /* 圆润无衬线字体,替换掉默认的 Inter */
+  --vp-font-family-base: "Quicksand", "Nunito", "Varela Round", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", system-ui,
+    -apple-system, "Segoe UI", sans-serif;
+  --vp-font-family-mono: "JetBrains Mono", "Cascadia Code", Consolas,
+    "SF Mono", Menlo, monospace;
 }
 
-.dark {
-  --site-bg-veil: rgba(14, 23, 18, 0.6);
-
-  --vp-c-brand-1: #6fcf9a;
-  --vp-c-brand-2: #5cbf88;
-  --vp-c-brand-3: #4aa877;
-  --vp-c-brand-soft: rgba(111, 207, 154, 0.14);
-
-  --vp-c-tip-1: var(--vp-c-brand-1);
-  --vp-c-tip-2: var(--vp-c-brand-2);
-  --vp-c-tip-3: var(--vp-c-brand-3);
-  --vp-c-tip-soft: var(--vp-c-brand-soft);
-
-  --vp-c-bg: rgba(14, 23, 18, 0.88);
-  --vp-c-bg-alt: rgba(10, 18, 14, 0.92);
-  --vp-c-bg-soft: rgba(19, 30, 24, 0.9);
-  --vp-c-bg-elv: #16231c;
-  --vp-c-divider: #1f2f26;
-  --vp-c-gutter: #16231c;
-
-  --vp-nav-bg-color: rgba(14, 23, 18, 0.74);
-  --vp-sidebar-bg-color: rgba(10, 18, 14, 0.92);
-
-  --vp-button-brand-bg: #4aa877;
-  --vp-button-brand-hover-bg: #5cbf88;
-  --vp-button-brand-active-bg: #6fcf9a;
-}
-
-/* ---------- 把背景图铺在最底层,再盖一层遮罩 ---------- */
+/* ============================================================
+   背景图
+   ============================================================ */
 body::before,
 body::after {
   content: '';
@@ -102,18 +127,450 @@ body::after {
   background: var(--site-bg-veil);
 }
 
-/* ---------- 顶栏 / 侧栏磨砂 ---------- */
-.VPNavBar,
-.VPSidebar {
-  backdrop-filter: saturate(160%) blur(12px);
-  -webkit-backdrop-filter: saturate(160%) blur(12px);
-}
-
+/* ============================================================
+   顶栏 —— 实色、圆润、药丸形链接
+   ============================================================ */
 .VPNav {
-  border-bottom: 1px solid var(--vp-c-divider);
+  border-bottom: 2px solid var(--k-border);
 }
 
-/* ---------- 正文里的链接下划线用品牌色 ---------- */
+.VPNavBar {
+  background-color: var(--k-surface) !important;
+}
+
+.VPNavBarTitle .title {
+  font-weight: 600;
+  gap: 10px;
+}
+
+/* 顶栏那朵山茶花也放进粉彩圆底里 */
+.VPNavBarTitle .logo {
+  padding: 5px;
+  border-radius: var(--k-r-full);
+  background-color: var(--k-green);
+  box-sizing: content-box;
+  transition: transform var(--k-dur) var(--k-ease);
+}
+
+.VPNavBarTitle .title:hover .logo {
+  transform: scale(1.12, 0.92);
+}
+
+.VPNavBarMenuLink {
+  padding: 6px 14px;
+  border-radius: var(--k-r-full);
+  font-weight: 500;
+  color: var(--k-text-2);
+  transition: background-color var(--k-dur) var(--k-ease),
+    color var(--k-dur) var(--k-ease), transform var(--k-dur) var(--k-ease);
+}
+
+.VPNavBarMenuLink:hover,
+.VPNavBarMenuLink.active {
+  color: var(--k-green-deep);
+  background-color: rgba(167, 224, 191, 0.35);
+  transform: scale(1.05, 1.1);
+}
+
+/* 深色模式开关已关闭,顺手藏掉 */
+.VPSwitchAppearance {
+  display: none !important;
+}
+
+.VPNavScreen {
+  background-color: var(--k-surface);
+}
+
+.VPNavScreenMenuLink {
+  border-radius: var(--k-r-full);
+  font-weight: 500;
+}
+
+/* 移动端那条 local nav */
+.VPLocalNav {
+  border-bottom: 2px solid var(--k-border) !important;
+  background-color: var(--k-surface) !important;
+}
+
+.VPLocalNav .menu {
+  border-radius: var(--k-r-full);
+  transition: transform var(--k-dur) var(--k-ease);
+}
+
+.VPLocalNav .menu:active {
+  transform: scale(0.94);
+}
+
+/* ============================================================
+   侧边栏 —— 药丸形条目
+   ============================================================ */
+.VPSidebar {
+  background-color: #eef8ea !important;
+  border-right: 2px solid var(--k-border);
+}
+
+.VPSidebarItem .item {
+  padding: 0;
+}
+
+.VPSidebarItem .link {
+  border-radius: var(--k-r-sm);
+  padding: 6px 12px;
+  font-weight: 500;
+  transition: background-color var(--k-dur) var(--k-ease),
+    color var(--k-dur) var(--k-ease), transform var(--k-dur) var(--k-ease);
+}
+
+.VPSidebarItem .link:hover {
+  background-color: rgba(167, 224, 191, 0.35);
+  color: var(--k-green-deep);
+}
+
+.VPSidebarItem.is-active > .item > .link > .text {
+  color: var(--k-green-deep);
+  font-weight: 600;
+}
+
+.VPSidebarItem.is-active > .item > .link {
+  background-color: rgba(167, 224, 191, 0.5);
+}
+
+.VPSidebarItem.level-1 > .item > .text,
+.VPSidebarItem.level-2 > .item > .text {
+  font-weight: 600;
+  color: var(--k-text);
+}
+
+.VPSidebarItem .caret {
+  transition: transform var(--k-dur) var(--k-ease);
+}
+
+/* ============================================================
+   正文 —— 宽松留白 + 圆角
+   ============================================================ */
+.vp-doc {
+  line-height: 1.85;
+}
+
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3 {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* 一级标题下加一条淡绿下划线 */
+.vp-doc h1 {
+  padding-bottom: 14px;
+  border-bottom: 3px solid rgba(167, 224, 191, 0.6);
+}
+
+/* 二三级标题前面一个小粉彩方块,替代原来那条硬分隔线 */
+.vp-doc h2::before,
+.vp-doc h3::before {
+  content: '';
+  display: inline-block;
+  width: 0.42em;
+  height: 0.42em;
+  margin-right: 0.34em;
+  border-radius: 0.14em;
+  background-color: var(--k-green);
+  vertical-align: 0.08em;
+}
+
+.vp-doc h3::before {
+  background-color: var(--k-mint);
+}
+
+.vp-doc h2 {
+  margin-top: 56px;
+  padding-top: 0;
+  border-top: none;
+}
+
+.vp-doc h3 {
+  margin-top: 36px;
+}
+
+.vp-doc p,
+.vp-doc li {
+  line-height: 1.85;
+}
+
+/* 链接:不用刺眼下划线 */
 .vp-doc a {
-  text-decoration-color: var(--vp-c-brand-soft);
+  color: var(--k-green-deep);
+  text-decoration: none;
+  border-bottom: 2px solid rgba(167, 224, 191, 0.7);
+  transition: border-color var(--k-dur) var(--k-ease),
+    background-color var(--k-dur) var(--k-ease);
+}
+
+.vp-doc a:hover {
+  background-color: rgba(167, 224, 191, 0.3);
+  border-bottom-color: var(--k-green-deep);
+}
+
+/* 行内代码 */
+.vp-doc :not(pre) > code {
+  border-radius: 8px;
+  background-color: #eaf6e6;
+  color: #1d5f40;
+  font-weight: 500;
+}
+
+.vp-doc a > code {
+  color: var(--k-green-deep);
+}
+
+/* 代码块 */
+.vp-doc div[class*='language-'] {
+  border-radius: var(--k-r);
+  border: 2px solid var(--k-border);
+  background-color: #fbfefb;
+  box-shadow: var(--k-shadow-sm);
+}
+
+.vp-doc div[class*='language-'] pre {
+  border-radius: 0 0 var(--k-r) var(--k-r);
+}
+
+.vp-doc div[class*='language-'] > span.lang,
+.vp-doc div[class*='language-'] > button.copy {
+  border-radius: var(--k-r-full);
+}
+
+.vp-doc div[class*='language-'] > button.copy {
+  transition: transform var(--k-dur) var(--k-ease),
+    background-color var(--k-dur) var(--k-ease);
+}
+
+.vp-doc div[class*='language-'] > button.copy:active {
+  transform: scale(0.92);
+}
+
+/* 表格 */
+.vp-doc table {
+  border-radius: var(--k-r-sm);
+  overflow: hidden;
+  border: 2px solid var(--k-border);
+  display: table;
+  width: 100%;
+}
+
+.vp-doc tr:nth-child(2n) {
+  background-color: #f6fbf3;
+}
+
+.vp-doc th {
+  background-color: rgba(167, 224, 191, 0.3);
+  color: var(--k-text);
+  font-weight: 600;
+}
+
+.vp-doc th,
+.vp-doc td {
+  border: none;
+  border-bottom: 1px solid var(--k-border);
+}
+
+.vp-doc tr:last-child td {
+  border-bottom: none;
+}
+
+/* 引用块 */
+.vp-doc blockquote {
+  border-radius: 0 var(--k-r-sm) var(--k-r-sm) 0;
+  border-left: 4px solid var(--k-border-strong);
+  background-color: #f3faf0;
+}
+
+/* 图片 */
+.vp-doc img {
+  border-radius: var(--k-r-sm);
+}
+
+/* 提示块 */
+.custom-block {
+  border-radius: var(--k-r-sm);
+  border-width: 2px;
+  padding: 18px 20px 4px;
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.custom-block .custom-block-title {
+  font-weight: 600;
+}
+
+.custom-block.tip {
+  background-color: rgba(167, 224, 191, 0.2);
+  border-color: var(--k-border-strong);
+}
+
+.custom-block.warning {
+  background-color: rgba(253, 230, 138, 0.28);
+  border-color: #f3d977;
+}
+
+.custom-block.danger {
+  background-color: rgba(251, 207, 213, 0.35);
+  border-color: #f0b3bd;
+}
+
+.custom-block.info {
+  background-color: rgba(169, 231, 216, 0.25);
+  border-color: #8fd8c6;
+}
+
+.custom-block.details {
+  background-color: #f4faf1;
+  border-color: var(--k-border);
+}
+
+/* 标题里的锚点链接别带下划线 */
+.vp-doc .header-anchor {
+  border-bottom: none;
+}
+
+.vp-doc .header-anchor:hover {
+  background-color: transparent;
+}
+
+/* ============================================================
+   右侧目录
+   ============================================================ */
+.VPDocOutlineItem a {
+  border-radius: 10px;
+  padding: 4px 10px;
+  font-weight: 500;
+  transition: background-color var(--k-dur) var(--k-ease),
+    color var(--k-dur) var(--k-ease);
+}
+
+.VPDocOutlineItem a:hover,
+.VPDocAsideOutline .outline-link.active {
+  color: var(--k-green-deep);
+  background-color: rgba(167, 224, 191, 0.3);
+}
+
+.VPDocAsideOutline .outline-marker {
+  background-color: var(--k-green);
+}
+
+/* ============================================================
+   按钮
+   ============================================================ */
+.VPButton {
+  border-radius: var(--k-r-full) !important;
+  font-weight: 500;
+  padding: 0 24px;
+  transition: transform var(--k-dur) var(--k-ease),
+    box-shadow var(--k-dur) var(--k-ease),
+    background-color var(--k-dur) var(--k-ease), color var(--k-dur) var(--k-ease);
+}
+
+.VPButton:hover {
+  transform: scale(1.05, 1.09);
+  box-shadow: var(--k-shadow-md);
+}
+
+.VPButton:active {
+  transform: scale(0.94);
+  box-shadow: var(--k-shadow-sm);
+}
+
+/* ============================================================
+   上下篇导航 / 页脚
+   ============================================================ */
+.VPDocFooter .pager-link {
+  border-radius: var(--k-r-sm);
+  border: 2px solid var(--k-border);
+  background-color: var(--k-surface);
+  padding: 16px 20px;
+  transition: transform var(--k-dur) var(--k-ease),
+    box-shadow var(--k-dur) var(--k-ease),
+    border-color var(--k-dur) var(--k-ease);
+}
+
+.VPDocFooter .pager-link:hover {
+  border-color: var(--k-border-strong);
+  box-shadow: var(--k-shadow-md);
+  transform: scale(1.02, 1.04);
+}
+
+.VPDocFooter .pager-link:active {
+  transform: scale(0.97);
+}
+
+.VPDocFooter .prev-next {
+  border-top: none;
+}
+
+.last-updated {
+  border-radius: var(--k-r-full);
+  background-color: rgba(167, 224, 191, 0.25);
+  padding: 4px 14px;
+  display: inline-block;
+}
+
+.VPFooter {
+  border-top: 2px solid var(--k-border) !important;
+  background-color: var(--k-surface) !important;
+}
+
+.VPFooter .message,
+.VPFooter .copyright {
+  font-weight: 500;
+}
+
+/* ============================================================
+   搜索 / 404 等杂项
+   ============================================================ */
+.DocSearch-Button,
+.VPNavBarSearch .DocSearch-Button {
+  border-radius: var(--k-r-full) !important;
+  border: 2px solid var(--k-border) !important;
+  background-color: var(--k-surface) !important;
+}
+
+.VPNotFound {
+  text-align: center;
+}
+
+/* ============================================================
+   滚动条(可选,保持柔和)
+   ============================================================ */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(167, 224, 191, 0.6);
+  border-radius: var(--k-r-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--k-green-dim);
+}
+
+/* ============================================================
+   无障碍:尊重系统的减少动效设置
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .VPButton:hover,
+  .VPNavBarMenuLink:hover,
+  .VPDocFooter .pager-link:hover {
+    transform: none;
+  }
 }
