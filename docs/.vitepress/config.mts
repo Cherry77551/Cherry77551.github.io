@@ -18,7 +18,7 @@ export default defineConfig({
 
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
-    ['meta', { name: 'theme-color', content: '#54b380' }],
+    ['meta', { name: 'theme-color', content: '#2e7d6b' }],
   ],
 
   markdown: {
