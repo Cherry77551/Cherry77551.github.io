@@ -4,24 +4,24 @@
 
 ## 新建一篇笔记
 
-1. 在 `docs/notes/` 下面新建文件,比如 `docs/notes/linux/docker-basics.md`
+1. 在 `docs/notes/` 下面新建文件,比如 `docs/notes/unity/coroutine.md`
 2. 第一行写标题:
 
    ```md
-   # Docker 入门
+   # 协程
    ```
 
 3. 正常往下写内容
 4. 打开 `docs/.vitepress/config.mts`,在 `sidebar` 的 `'/notes/'` 里加一行:
 
    ```ts
-   { text: 'Docker 入门', link: '/notes/linux/docker-basics' }
+   { text: '协程', link: '/notes/unity/coroutine' }
    ```
 
 这样它就出现在左边目录里了。
 
 ::: tip 文件路径就是网址
-`docs/notes/linux/docker-basics.md` 对应的网址是 `/notes/linux/docker-basics`。
+`docs/notes/unity/coroutine.md` 对应的网址是 `/notes/unity/coroutine`。
 开头目录 `docs/` 不算,末尾的 `.md` 不算。
 :::
 
@@ -42,7 +42,7 @@
 ```md
 **加粗** 和 *斜体*
 [链接文字](https://vitepress.dev)
-[站内跳转](/notes/web/css-layout)
+[站内跳转](/notes/)
 ```
 
 ### 代码

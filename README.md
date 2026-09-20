@@ -60,9 +60,7 @@ docs/
 ├─ index.md             # 首页
 ├─ about.md             # 关于
 ├─ notes/               # 笔记
-│  ├─ dotnet/          #   C# 笔记(为 Unity 准备,8 篇)
-│  ├─ linux/
-│  └─ web/
+│  └─ dotnet/          #   C# 笔记(为 Unity 准备,8 篇)
 ├─ projects/            # 项目
 └─ public/              # 静态文件,原样复制到网站根目录
    ├─ bg.svg            # 默认背景图(换成自己的就是改这里)

@@ -57,14 +57,6 @@ export default defineConfig({
             { text: '8. 内存、GC 与性能', link: '/notes/dotnet/memory-performance' },
           ],
         },
-        {
-          text: 'Linux 与工具',
-          items: [{ text: 'WSL 常用技巧', link: '/notes/linux/wsl-tips' }],
-        },
-        {
-          text: '前端',
-          items: [{ text: 'CSS 布局笔记', link: '/notes/web/css-layout' }],
-        },
       ],
       '/projects/': [
         {
