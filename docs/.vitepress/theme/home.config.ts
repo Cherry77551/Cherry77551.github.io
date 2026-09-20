@@ -65,7 +65,7 @@ export const homeConfig = {
   profile: {
     name: '乌鸦张嘴',
     /** 头像,留空显示名字首字 */
-    avatar: '/ccd14b8ddc72a0bde7ac105d890b6433.jpg',
+    avatar: '/avatar.jpg',
     bio: '在学 C# 和 Unity。',
     /** 统计数字,不想要就写 stats: [] */
     stats: [
