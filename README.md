@@ -66,8 +66,10 @@ docs/
 │  └─ dotnet/          #   C# 笔记(为 Unity 准备,8 篇)
 ├─ projects/            # 项目
 └─ public/              # 静态文件,原样复制到网站根目录
-   ├─ bg.svg            # 默认背景图(换成自己的照片)
-   └─ favicon.svg       # 浏览器标签页图标
+   ├─ avatar.jpg         # 头像(首页个人卡片用)
+   ├─ favicon.png        # 浏览器标签页图标(256×256)
+   ├─ apple-touch-icon.png  # 手机添加到主屏时的图标(180×180)
+   └─ bg.svg             # 默认背景图(换成自己的照片)
 ```
 
 ## 图片怎么放(重点)
@@ -207,7 +209,8 @@ cat ~/.ssh/id_ed25519.pub                  # 把输出粘到 GitHub → Settings
 - [x] 站点名称/昵称:现在是 `乌鸦张嘴`,在 `docs/.vitepress/config.mts` 的 `title` 和 `footer.copyright`,以及 `docs/about.md` 的自我介绍
 - [ ] **首页的头像、简介、统计数字、入口封面图** —— 全在 `docs/.vitepress/theme/home.config.ts`
 - [ ] **背景照片** —— 放 `docs/public/img/`,写进 `home.config.ts` 的 `backgroundImages`
-- [ ] `docs/public/favicon.svg` 想换的话直接替换文件(现在是玫粉→薄荷渐变 + 一个「鸦」字)
+- [ ] 标签页图标:现在是 `docs/public/favicon.png`(从你的头像裁出来的 256×256 方图)。
+      想换就把新图居中裁成正方形,覆盖这个文件 + `apple-touch-icon.png` 即可
 - [ ] 想公开邮箱的话,加在 `docs/about.md` 的联系方式里
 
 ## 后面可以加的
