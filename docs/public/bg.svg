@@ -9,22 +9,48 @@
       <stop offset="1" stop-color="#eef8f1" stop-opacity="0"/>
     </radialGradient>
 
+    <radialGradient id="shade">
+      <stop offset="0%" stop-color="#5c0a12" stop-opacity="0.5"/>
+      <stop offset="55%" stop-color="#5c0a12" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#5c0a12" stop-opacity="0"/>
+    </radialGradient>
+
     <g id="camellia">
-      <g fill="#ffffff" stroke="#8fd0aa" stroke-width="3" stroke-linejoin="round">
-        <ellipse cx="0" cy="-24" rx="13" ry="19" transform="rotate(0)"/>
-        <ellipse cx="0" cy="-24" rx="13" ry="19" transform="rotate(72)"/>
-        <ellipse cx="0" cy="-24" rx="13" ry="19" transform="rotate(144)"/>
-        <ellipse cx="0" cy="-24" rx="13" ry="19" transform="rotate(216)"/>
-        <ellipse cx="0" cy="-24" rx="13" ry="19" transform="rotate(288)"/>
+      <g stroke="#17452c" stroke-width="1.7" stroke-linejoin="round">
+        <path d="M0 0 C 20 -17, 52 -16, 76 0 C 52 16, 20 17, 0 0 Z" fill="#2c6b45"/>
+        <path d="M0 0 C 20 -17, 52 -16, 76 0 C 52 16, 20 17, 0 0 Z"
+              transform="scale(-1,1)" fill="#2c6b45"/>
       </g>
-      <g fill="#ffffff" stroke="#8fd0aa" stroke-width="3" stroke-linejoin="round">
-        <ellipse cx="0" cy="-17" rx="9.5" ry="14" transform="rotate(36)"/>
-        <ellipse cx="0" cy="-17" rx="9.5" ry="14" transform="rotate(108)"/>
-        <ellipse cx="0" cy="-17" rx="9.5" ry="14" transform="rotate(180)"/>
-        <ellipse cx="0" cy="-17" rx="9.5" ry="14" transform="rotate(252)"/>
-        <ellipse cx="0" cy="-17" rx="9.5" ry="14" transform="rotate(324)"/>
+
+      <g fill="#c53a47" stroke="#7d1119" stroke-width="1.5" stroke-linejoin="round">
+        <ellipse cx="0" cy="-32" rx="17" ry="24" transform="rotate(0)"/>
+        <ellipse cx="0" cy="-32" rx="17" ry="24" transform="rotate(72)"/>
+        <ellipse cx="0" cy="-32" rx="17" ry="24" transform="rotate(144)"/>
+        <ellipse cx="0" cy="-32" rx="17" ry="24" transform="rotate(216)"/>
+        <ellipse cx="0" cy="-32" rx="17" ry="24" transform="rotate(288)"/>
       </g>
-      <circle r="6.5" fill="#e9c46a"/>
+
+      <g fill="#a51d2a" stroke="#7d1119" stroke-width="1.5" stroke-linejoin="round">
+        <ellipse cx="0" cy="-21" rx="14" ry="19" transform="rotate(36)"/>
+        <ellipse cx="0" cy="-21" rx="14" ry="19" transform="rotate(108)"/>
+        <ellipse cx="0" cy="-21" rx="14" ry="19" transform="rotate(180)"/>
+        <ellipse cx="0" cy="-21" rx="14" ry="19" transform="rotate(252)"/>
+        <ellipse cx="0" cy="-21" rx="14" ry="19" transform="rotate(324)"/>
+      </g>
+
+      <circle r="57" fill="url(#shade)"/>
+
+      <g stroke="#e8c25c" stroke-width="1.9" stroke-linecap="round">
+        <line x1="0" y1="0" x2="0" y2="-16"/>
+        <line x1="0" y1="0" x2="0" y2="-16" transform="rotate(45)"/>
+        <line x1="0" y1="0" x2="0" y2="-16" transform="rotate(90)"/>
+        <line x1="0" y1="0" x2="0" y2="-16" transform="rotate(135)"/>
+        <line x1="0" y1="0" x2="0" y2="-16" transform="rotate(180)"/>
+        <line x1="0" y1="0" x2="0" y2="-16" transform="rotate(225)"/>
+        <line x1="0" y1="0" x2="0" y2="-16" transform="rotate(270)"/>
+        <line x1="0" y1="0" x2="0" y2="-16" transform="rotate(315)"/>
+      </g>
+      <circle r="4.5" fill="#e8c25c"/>
     </g>
   </defs>
 
@@ -34,7 +60,7 @@
   <circle cx="1290" cy="170" r="230" fill="#b9e4cc" opacity="0.4"/>
   <circle cx="230" cy="830" r="320" fill="#a9dcc0" opacity="0.32"/>
 
-  <use href="#camellia" transform="translate(1330,200) scale(2.4)" opacity="0.14"/>
-  <use href="#camellia" transform="translate(250,790) scale(1.6)" opacity="0.11"/>
-  <use href="#camellia" transform="translate(840,110) scale(0.85)" opacity="0.09"/>
+  <use href="#camellia" transform="translate(1300,240) scale(1.9) rotate(-14)" opacity="0.10"/>
+  <use href="#camellia" transform="translate(280,760) scale(1.25) rotate(16)"  opacity="0.08"/>
+  <use href="#camellia" transform="translate(850,110) scale(0.7) rotate(-26)"   opacity="0.06"/>
 </svg>

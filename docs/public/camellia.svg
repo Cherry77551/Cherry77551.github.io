@@ -1,17 +1,54 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="山茶花">
-  <g fill="#f4faf6" stroke="#4aa877" stroke-width="2.5" stroke-linejoin="round">
-    <ellipse cx="50" cy="26" rx="13" ry="19" transform="rotate(0 50 50)"/>
-    <ellipse cx="50" cy="26" rx="13" ry="19" transform="rotate(72 50 50)"/>
-    <ellipse cx="50" cy="26" rx="13" ry="19" transform="rotate(144 50 50)"/>
-    <ellipse cx="50" cy="26" rx="13" ry="19" transform="rotate(216 50 50)"/>
-    <ellipse cx="50" cy="26" rx="13" ry="19" transform="rotate(288 50 50)"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-25 -25 190 190" role="img" aria-label="山茶花">
+  <defs>
+    <g id="leaf">
+      <path d="M0 0 C 22 -18, 60 -17, 88 0 C 60 17, 22 18, 0 0 Z"
+            fill="#2c6b45" stroke="#17452c" stroke-width="1.7" stroke-linejoin="round"/>
+      <path d="M8 0 H 78" fill="none" stroke="#5aa87a" stroke-width="1.7" stroke-linecap="round"/>
+    </g>
+
+    <g id="stamen">
+      <line x1="70" y1="70" x2="70" y2="55" stroke="#e8c25c" stroke-width="2.4" stroke-linecap="round"/>
+      <circle cx="70" cy="53.5" r="3.2" fill="#dfa62b"/>
+    </g>
+
+    <radialGradient id="shade">
+      <stop offset="0%" stop-color="#5c0a12" stop-opacity="0.5"/>
+      <stop offset="55%" stop-color="#5c0a12" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#5c0a12" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <use href="#leaf" transform="translate(70,70) rotate(36)"/>
+  <use href="#leaf" transform="translate(70,70) rotate(108)"/>
+  <use href="#leaf" transform="translate(70,70) rotate(180)"/>
+  <use href="#leaf" transform="translate(70,70) rotate(252)"/>
+  <use href="#leaf" transform="translate(70,70) rotate(324)"/>
+
+  <g fill="#c53a47" stroke="#7d1119" stroke-width="1.5" stroke-linejoin="round">
+    <ellipse cx="70" cy="38" rx="17" ry="24" transform="rotate(0 70 70)"/>
+    <ellipse cx="70" cy="38" rx="17" ry="24" transform="rotate(72 70 70)"/>
+    <ellipse cx="70" cy="38" rx="17" ry="24" transform="rotate(144 70 70)"/>
+    <ellipse cx="70" cy="38" rx="17" ry="24" transform="rotate(216 70 70)"/>
+    <ellipse cx="70" cy="38" rx="17" ry="24" transform="rotate(288 70 70)"/>
   </g>
-  <g fill="#ffffff" stroke="#4aa877" stroke-width="2.5" stroke-linejoin="round">
-    <ellipse cx="50" cy="33" rx="9.5" ry="14" transform="rotate(36 50 50)"/>
-    <ellipse cx="50" cy="33" rx="9.5" ry="14" transform="rotate(108 50 50)"/>
-    <ellipse cx="50" cy="33" rx="9.5" ry="14" transform="rotate(180 50 50)"/>
-    <ellipse cx="50" cy="33" rx="9.5" ry="14" transform="rotate(252 50 50)"/>
-    <ellipse cx="50" cy="33" rx="9.5" ry="14" transform="rotate(324 50 50)"/>
+
+  <g fill="#a51d2a" stroke="#7d1119" stroke-width="1.5" stroke-linejoin="round">
+    <ellipse cx="70" cy="49" rx="14" ry="19" transform="rotate(36 70 70)"/>
+    <ellipse cx="70" cy="49" rx="14" ry="19" transform="rotate(108 70 70)"/>
+    <ellipse cx="70" cy="49" rx="14" ry="19" transform="rotate(180 70 70)"/>
+    <ellipse cx="70" cy="49" rx="14" ry="19" transform="rotate(252 70 70)"/>
+    <ellipse cx="70" cy="49" rx="14" ry="19" transform="rotate(324 70 70)"/>
   </g>
-  <circle cx="50" cy="50" r="7" fill="#e9c46a"/>
+
+  <circle cx="70" cy="70" r="57" fill="url(#shade)"/>
+
+  <use href="#stamen" transform="rotate(0 70 70)"/>
+  <use href="#stamen" transform="rotate(45 70 70)"/>
+  <use href="#stamen" transform="rotate(90 70 70)"/>
+  <use href="#stamen" transform="rotate(135 70 70)"/>
+  <use href="#stamen" transform="rotate(180 70 70)"/>
+  <use href="#stamen" transform="rotate(225 70 70)"/>
+  <use href="#stamen" transform="rotate(270 70 70)"/>
+  <use href="#stamen" transform="rotate(315 70 70)"/>
+  <circle cx="70" cy="70" r="4.5" fill="#e8c25c"/>
 </svg>
