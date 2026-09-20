@@ -1,72 +1,70 @@
 /**
- * 全站样式 —— 玻璃拟态 + 玫粉薄荷配色
+ * 全站样式 —— 玻璃拟态 + 绿色主基调
  * ----------------------------------------------------------------------------
  * 背景照片和渐变由 SiteBackground.vue 负责,这个文件只管「浮在上面的东西」。
  *
- * ▍四种配色
- *   #C98B92  玫粉(主色:描边、渐变、强调块)
- *   #F7C9D4  樱花粉
- *   #D6F0EF  薄雾青
- *   #A2DCCF  薄荷绿
+ * ▍四种配色(绿色为主,粉/玫粉只做点缀)
+ *   #A2DCCF  薄荷绿  主基调
+ *   #D6F0EF  薄雾青  主基调
+ *   #F7C9D4  樱花粉  点缀(warning 提示块、悬停高亮)
+ *   #C98B92  玫粉    点缀(边框、渐变、小面积强调)
  *
- *   注意:这四种色直接当文字色对比度不够,所以文字/链接用加深版的 --p-rose-ink。
+ *   这两个绿明度偏高,直接当文字色对比度只有 1.5:1,所以链接/文字用的是
+ *   从薄荷绿加深出来的 --p-green-ink(#2e7d6b,对比度 5.1:1)。
  */
 
 :root {
   /* ---------- 四种配色 ---------- */
-  --p-rose: #c98b92;
-  --p-pink: #f7c9d4;
-  --p-mist: #d6f0ef;
   --p-mint: #a2dccf;
+  --p-mist: #d6f0ef;
+  --p-pink: #f7c9d4;
+  --p-rose: #c98b92;
 
-  /* 主色加深版:给文字和链接用(白底对比度 5.2:1) */
-  --p-rose-ink: #9a5a64;
-  --p-rose-deep: #874c56;
+  /* 文字/链接用的深绿 */
+  --p-green-ink: #2e7d6b;
+  --p-green-deep: #256556;
 
-  /* ---------- 字体 ---------- */
-  --site-font-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC",
-    "STSong", Georgia, "Times New Roman", "SimSun", serif;
-  --site-font-sans: "Inter", system-ui, -apple-system, "Segoe UI",
-    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei",
+  /* ---------- 字体:全部无衬线 ---------- */
+  --site-font-head: system-ui, -apple-system, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC",
     sans-serif;
 
-  --vp-font-family-base: var(--site-font-serif);
+  --vp-font-family-base: var(--site-font-head);
   --vp-font-family-mono: ui-monospace, "Cascadia Code", "JetBrains Mono",
     Consolas, "SF Mono", Menlo, monospace;
 
-  /* ---------- 文字(略带暖调的中性色) ---------- */
-  --ink-1: #3b3033;
-  --ink-2: #6a5c60;
-  --ink-3: #93858a;
+  /* ---------- 文字 ---------- */
+  --ink-1: #1f2d2b;
+  --ink-2: #4b5f5b;
+  --ink-3: #7b8f8b;
 
   /* ---------- 玻璃材质 ---------- */
   --glass: rgba(255, 255, 255, 0.5);
   --glass-strong: rgba(255, 255, 255, 0.68);
   --glass-border: rgba(255, 255, 255, 0.55);
-  --glass-blur: blur(16px) saturate(150%);
-  --glass-shadow: 0 10px 30px -12px rgba(90, 60, 66, 0.22);
+  --glass-shadow: 0 10px 30px -12px rgba(37, 90, 78, 0.2);
 
   --r-lg: 24px;
   --r-md: 16px;
   --r-pill: 9999px;
 
   /* ---------- 映射到 VitePress ---------- */
-  --vp-c-brand-1: var(--p-rose-ink);
-  --vp-c-brand-2: var(--p-rose-deep);
-  --vp-c-brand-3: var(--p-rose);
-  --vp-c-brand-soft: rgba(201, 139, 146, 0.2);
+  --vp-c-brand-1: var(--p-green-ink);
+  --vp-c-brand-2: var(--p-green-deep);
+  --vp-c-brand-3: var(--p-mint);
+  --vp-c-brand-soft: rgba(162, 220, 207, 0.28);
 
-  --vp-c-tip-1: var(--p-rose-ink);
-  --vp-c-tip-2: var(--p-rose-deep);
-  --vp-c-tip-3: var(--p-rose);
+  --vp-c-tip-1: var(--p-green-ink);
+  --vp-c-tip-2: var(--p-green-deep);
+  --vp-c-tip-3: var(--p-mint);
   --vp-c-tip-soft: rgba(214, 240, 239, 0.6);
 
   --vp-c-bg: rgba(255, 255, 255, 0.4);
   --vp-c-bg-alt: rgba(255, 255, 255, 0.5);
   --vp-c-bg-soft: rgba(255, 255, 255, 0.55);
   --vp-c-bg-elv: rgba(255, 255, 255, 0.85);
-  --vp-c-divider: rgba(201, 139, 146, 0.28);
-  --vp-c-gutter: rgba(201, 139, 146, 0.2);
+  --vp-c-divider: rgba(162, 220, 207, 0.4);
+  --vp-c-gutter: rgba(162, 220, 207, 0.28);
 
   --vp-c-text-1: var(--ink-1);
   --vp-c-text-2: var(--ink-2);
@@ -77,19 +75,19 @@
 
   --vp-button-brand-border: transparent;
   --vp-button-brand-text: #ffffff;
-  --vp-button-brand-bg: var(--p-rose-ink);
+  --vp-button-brand-bg: var(--p-green-ink);
   --vp-button-brand-hover-border: transparent;
   --vp-button-brand-hover-text: #ffffff;
-  --vp-button-brand-hover-bg: var(--p-rose-deep);
+  --vp-button-brand-hover-bg: var(--p-green-deep);
   --vp-button-brand-active-border: transparent;
   --vp-button-brand-active-text: #ffffff;
-  --vp-button-brand-active-bg: #7d444d;
+  --vp-button-brand-active-bg: #1d5548;
 
   --vp-button-alt-border: 1px solid var(--glass-border);
-  --vp-button-alt-text: var(--p-rose-ink);
+  --vp-button-alt-text: var(--p-green-ink);
   --vp-button-alt-bg: var(--glass);
-  --vp-button-alt-hover-border: 1px solid rgba(201, 139, 146, 0.4);
-  --vp-button-alt-hover-text: var(--p-rose-deep);
+  --vp-button-alt-hover-border: 1px solid rgba(162, 220, 207, 0.7);
+  --vp-button-alt-hover-text: var(--p-green-deep);
   --vp-button-alt-hover-bg: var(--glass-strong);
 }
 
@@ -115,7 +113,7 @@ body {
    顶栏
    ============================================================ */
 .VPNav {
-  border-bottom: 1px solid rgba(201, 139, 146, 0.25);
+  border-bottom: 1px solid rgba(162, 220, 207, 0.45);
 }
 
 .VPNavBar {
@@ -130,24 +128,24 @@ body {
 }
 
 .VPNavBarTitle .title {
-  font-family: var(--site-font-serif);
+  font-family: var(--site-font-head);
   font-size: 19px;
-  font-weight: 900;
-  letter-spacing: -0.02em;
+  font-weight: 800;
+  letter-spacing: -0.01em;
   color: var(--ink-1);
 }
 
 .VPNavBarMenuLink {
-  font-family: var(--site-font-serif);
+  font-family: var(--site-font-head);
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--ink-2);
   transition: color 0.3s;
 }
 
 .VPNavBarMenuLink:hover,
 .VPNavBarMenuLink.active {
-  color: var(--p-rose-ink);
+  color: var(--p-green-ink);
 }
 
 .VPSwitchAppearance {
@@ -164,7 +162,7 @@ body {
   background-color: rgba(255, 255, 255, 0.55) !important;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(201, 139, 146, 0.25) !important;
+  border-bottom: 1px solid rgba(162, 220, 207, 0.45) !important;
 }
 
 .VPLocalNav .menu,
@@ -180,7 +178,7 @@ body {
   background-color: rgba(255, 255, 255, 0.42) !important;
   backdrop-filter: blur(18px) saturate(150%);
   -webkit-backdrop-filter: blur(18px) saturate(150%);
-  border-right: 1px solid rgba(201, 139, 146, 0.22);
+  border-right: 1px solid rgba(162, 220, 207, 0.4);
 }
 
 .VPSidebarItem .link {
@@ -192,23 +190,23 @@ body {
 }
 
 .VPSidebarItem .link:hover {
-  background-color: rgba(247, 201, 212, 0.45);
-  color: var(--p-rose-ink);
+  background-color: rgba(162, 220, 207, 0.5);
+  color: var(--p-green-ink);
 }
 
 .VPSidebarItem.is-active > .item > .link {
-  background-color: rgba(247, 201, 212, 0.65);
+  background-color: rgba(162, 220, 207, 0.72);
 }
 
 .VPSidebarItem.is-active > .item > .link > .text {
-  color: var(--p-rose-ink);
+  color: var(--p-green-ink);
   font-weight: 700;
 }
 
 .VPSidebarItem.level-0 > .item > .text,
 .VPSidebarItem.level-1 > .item > .text,
 .VPSidebarItem.level-2 > .item > .text {
-  font-family: var(--site-font-serif);
+  font-family: var(--site-font-head);
   font-weight: 700;
   color: var(--ink-1);
 }
@@ -224,7 +222,7 @@ body {
 .vp-doc h2,
 .vp-doc h3,
 .vp-doc h4 {
-  font-family: var(--site-font-serif);
+  font-family: var(--site-font-head);
   font-weight: 700;
   color: var(--ink-1);
 }
@@ -236,31 +234,31 @@ body {
 }
 
 .vp-doc a {
-  color: var(--p-rose-ink);
+  color: var(--p-green-ink);
   font-weight: 500;
   text-decoration: none;
-  border-bottom: 1px solid rgba(201, 139, 146, 0.45);
+  border-bottom: 1px solid rgba(162, 220, 207, 0.9);
   transition: border-color 0.25s, background-color 0.25s;
 }
 
 .vp-doc a:hover {
-  background-color: rgba(247, 201, 212, 0.4);
-  border-bottom-color: var(--p-rose-ink);
+  background-color: rgba(162, 220, 207, 0.4);
+  border-bottom-color: var(--p-green-ink);
 }
 
 /* 行内代码 */
 .vp-doc :not(pre) > code {
   border-radius: 8px;
-  background-color: rgba(214, 240, 239, 0.75);
-  border: 1px solid rgba(162, 220, 207, 0.5);
-  color: #2f6f66;
+  background-color: rgba(214, 240, 239, 0.8);
+  border: 1px solid rgba(162, 220, 207, 0.55);
+  color: #256556;
   font-weight: 500;
 }
 
 /* 代码块 */
 .vp-doc div[class*='language-'] {
   border-radius: var(--r-lg);
-  border: 1px solid rgba(162, 220, 207, 0.45);
+  border: 1px solid rgba(162, 220, 207, 0.5);
   background-color: rgba(255, 255, 255, 0.74) !important;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -278,7 +276,7 @@ body {
 
 .vp-doc div[class*='language-'] > button.copy {
   border-radius: var(--r-pill);
-  background-color: rgba(214, 240, 239, 0.8);
+  background-color: rgba(214, 240, 239, 0.85);
 }
 
 /* 表格 */
@@ -287,15 +285,15 @@ body {
   width: 100%;
   border-radius: var(--r-md);
   overflow: hidden;
-  border: 1px solid rgba(201, 139, 146, 0.25);
+  border: 1px solid rgba(162, 220, 207, 0.5);
   background-color: rgba(255, 255, 255, 0.6);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
 
 .vp-doc th {
-  background-color: rgba(247, 201, 212, 0.5);
-  font-family: var(--site-font-serif);
+  background-color: rgba(162, 220, 207, 0.5);
+  font-family: var(--site-font-head);
   font-weight: 700;
   color: var(--ink-1);
 }
@@ -303,11 +301,11 @@ body {
 .vp-doc th,
 .vp-doc td {
   border: none;
-  border-bottom: 1px solid rgba(201, 139, 146, 0.18);
+  border-bottom: 1px solid rgba(162, 220, 207, 0.32);
 }
 
 .vp-doc tr:nth-child(2n) {
-  background-color: rgba(214, 240, 239, 0.35);
+  background-color: rgba(214, 240, 239, 0.4);
 }
 
 .vp-doc tr:last-child td {
@@ -317,7 +315,7 @@ body {
 /* 引用块 */
 .vp-doc blockquote {
   border-radius: var(--r-md);
-  border-left: 4px solid rgba(201, 139, 146, 0.55);
+  border-left: 4px solid rgba(162, 220, 207, 0.9);
   background-color: rgba(255, 255, 255, 0.55);
 }
 
@@ -326,7 +324,7 @@ body {
   border-radius: var(--r-md);
 }
 
-/* 提示块 —— 四种配色各占一档 */
+/* 提示块:两个绿做主色,粉/玫粉只留给 warning 和 danger */
 .custom-block {
   border-radius: var(--r-md);
   border: 1px solid var(--glass-border);
@@ -340,23 +338,23 @@ body {
 
 /* tip:薄雾青 */
 .custom-block.tip {
-  background-color: rgba(214, 240, 239, 0.7);
-  border-color: rgba(162, 220, 207, 0.6);
+  background-color: rgba(214, 240, 239, 0.72);
+  border-color: rgba(162, 220, 207, 0.7);
 }
 
 /* info:薄荷绿 */
 .custom-block.info {
-  background-color: rgba(162, 220, 207, 0.35);
-  border-color: rgba(162, 220, 207, 0.65);
+  background-color: rgba(162, 220, 207, 0.42);
+  border-color: rgba(162, 220, 207, 0.75);
 }
 
-/* warning:樱花粉 */
+/* warning:樱花粉(点缀) */
 .custom-block.warning {
   background-color: rgba(247, 201, 212, 0.55);
   border-color: rgba(201, 139, 146, 0.45);
 }
 
-/* danger:玫粉加深 */
+/* danger:玫粉(点缀) */
 .custom-block.danger {
   background-color: rgba(201, 139, 146, 0.28);
   border-color: rgba(201, 139, 146, 0.65);
@@ -374,7 +372,7 @@ body {
    右侧大纲
    ============================================================ */
 .VPDocAsideOutline .outline-title {
-  font-family: var(--site-font-serif);
+  font-family: var(--site-font-head);
   font-weight: 700;
   color: var(--ink-1);
 }
@@ -387,12 +385,12 @@ body {
 
 .VPDocOutlineItem a:hover,
 .VPDocAsideOutline .outline-link.active {
-  color: var(--p-rose-ink);
-  background-color: rgba(247, 201, 212, 0.45);
+  color: var(--p-green-ink);
+  background-color: rgba(162, 220, 207, 0.5);
 }
 
 .VPDocAsideOutline .outline-marker {
-  background-color: var(--p-rose);
+  background-color: var(--p-mint);
 }
 
 /* ============================================================
@@ -406,7 +404,7 @@ body {
 
 .VPButton:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 24px -10px rgba(154, 90, 100, 0.5);
+  box-shadow: 0 10px 24px -10px rgba(46, 125, 107, 0.5);
 }
 
 /* ============================================================
@@ -414,7 +412,7 @@ body {
    ============================================================ */
 .VPDocFooter .pager-link {
   border-radius: var(--r-md);
-  border: 1px solid rgba(201, 139, 146, 0.22);
+  border: 1px solid rgba(162, 220, 207, 0.4);
   background-color: rgba(255, 255, 255, 0.5);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -422,7 +420,7 @@ body {
 }
 
 .VPDocFooter .pager-link:hover {
-  background-color: rgba(247, 201, 212, 0.45);
+  background-color: rgba(162, 220, 207, 0.45);
   box-shadow: var(--glass-shadow);
   transform: translateY(-2px);
 }
@@ -433,13 +431,13 @@ body {
 
 .last-updated {
   border-radius: var(--r-pill);
-  background-color: rgba(214, 240, 239, 0.7);
+  background-color: rgba(214, 240, 239, 0.75);
   padding: 4px 14px;
   display: inline-block;
 }
 
 .VPFooter {
-  border-top: 1px solid rgba(201, 139, 146, 0.22) !important;
+  border-top: 1px solid rgba(162, 220, 207, 0.4) !important;
   background-color: rgba(255, 255, 255, 0.42) !important;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -451,7 +449,7 @@ body {
 .DocSearch-Button {
   border-radius: var(--r-pill) !important;
   background-color: rgba(255, 255, 255, 0.55) !important;
-  border: 1px solid rgba(201, 139, 146, 0.22) !important;
+  border: 1px solid rgba(162, 220, 207, 0.5) !important;
 }
 
 ::-webkit-scrollbar {
@@ -460,12 +458,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: rgba(201, 139, 146, 0.4);
+  background-color: rgba(162, 220, 207, 0.7);
   border-radius: var(--r-pill);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(201, 139, 146, 0.65);
+  background-color: var(--p-mint);
 }
 
 /* ============================================================

@@ -78,14 +78,14 @@ onBeforeUnmount(() => {
   -webkit-backdrop-filter: blur(16px) saturate(150%);
 }
 
-/* 缓慢流动的玫粉薄荷渐变,以 color 模式叠上去给整站统一色调。
+/* 缓慢流动的绿色渐变,以 color 模式叠上去给整站统一色调。
    用自己照片时靠它把色调拉齐;不需要就写 opacity: 0 */
 .site-bg__tint {
   position: absolute;
   inset: 0;
   opacity: 0.3;
   mix-blend-mode: color;
-  background: linear-gradient(-45deg, #f7c9d4, #c98b92, #a2dccf, #d6f0ef);
+  background: linear-gradient(-45deg, #d6f0ef, #a2dccf, #f7c9d4, #a2dccf);
   background-size: 400% 400%;
   animation: siteBgMove 15s ease infinite;
 }

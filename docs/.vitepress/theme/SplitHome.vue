@@ -15,13 +15,13 @@ const statusBar = homeConfig.statusBar
 
 const initial = computed(() => (profile.name || '?').trim().charAt(0))
 
-/* 没上传封面图时,用这四色轮着做渐变兜底 */
+/* 没上传封面图时,用这几种绿为主、粉色点缀的渐变兜底 */
 const gradientPairs = [
-  ['#c98b92', '#a2dccf'],
-  ['#a2dccf', '#d6f0ef'],
-  ['#f7c9d4', '#c98b92'],
-  ['#d6f0ef', '#a2dccf'],
-  ['#c98b92', '#f7c9d4'],
+  ['#2e7d6b', '#a2dccf'],
+  ['#a2dccf', '#f7c9d4'],
+  ['#2e7d6b', '#d6f0ef'],
+  ['#d6f0ef', '#c98b92'],
+  ['#a2dccf', '#2e7d6b'],
 ]
 
 function entryStyle(i: number) {
@@ -169,8 +169,8 @@ function entryStyle(i: number) {
   background: rgba(255, 255, 255, 0.45);
   backdrop-filter: blur(20px) saturate(160%);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
-  border-bottom: 1px solid rgba(201, 139, 146, 0.25);
-  box-shadow: 0 1px 2px rgba(90, 60, 66, 0.05);
+  border-bottom: 1px solid rgba(162, 220, 207, 0.5);
+  box-shadow: 0 1px 2px rgba(37, 90, 78, 0.05);
 }
 
 .hdr__inner {
@@ -185,7 +185,7 @@ function entryStyle(i: number) {
 }
 
 .hdr__brand {
-  font-family: var(--site-font-serif);
+  font-family: var(--site-font-head);
   font-size: 20px;
   font-weight: 900;
   letter-spacing: -0.02em;
@@ -195,7 +195,7 @@ function entryStyle(i: number) {
 }
 
 .hdr__brand:hover {
-  color: var(--p-rose-ink);
+  color: var(--p-green-ink);
 }
 
 .hdr__nav {
@@ -205,7 +205,7 @@ function entryStyle(i: number) {
 
 .hdr__nav a {
   position: relative;
-  font-family: var(--site-font-serif);
+  font-family: var(--site-font-head);
   font-size: 14px;
   font-weight: 700;
   color: var(--ink-2);
@@ -215,7 +215,7 @@ function entryStyle(i: number) {
 
 .hdr__nav a:hover,
 .hdr__nav a.is-active {
-  color: var(--p-rose-ink);
+  color: var(--p-green-ink);
 }
 
 .hdr__nav a.is-active::after {
@@ -226,7 +226,7 @@ function entryStyle(i: number) {
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: var(--p-rose);
+  background: var(--p-green-ink);
   transform: translateX(-50%);
 }
 
@@ -251,7 +251,7 @@ function entryStyle(i: number) {
   backdrop-filter: blur(14px) saturate(150%);
   -webkit-backdrop-filter: blur(14px) saturate(150%);
   border: 1px solid rgba(255, 255, 255, 0.6);
-  box-shadow: 0 10px 30px -12px rgba(90, 60, 66, 0.22);
+  box-shadow: 0 10px 30px -12px rgba(37, 90, 78, 0.22);
 }
 
 /* ---------------- 个人卡片 ---------------- */
@@ -280,8 +280,8 @@ function entryStyle(i: number) {
   height: 92px;
   border-radius: 20px;
   padding: 3px;
-  background: linear-gradient(135deg, #c98b92, #a2dccf);
-  box-shadow: 0 8px 20px -8px rgba(201, 139, 146, 0.65);
+  background: linear-gradient(135deg, #2e7d6b, #a2dccf);
+  box-shadow: 0 8px 20px -8px rgba(46, 125, 107, 0.5);
 }
 
 .profile__avatar img {
@@ -300,10 +300,10 @@ function entryStyle(i: number) {
   height: 100%;
   border-radius: 17px;
   background: #fff;
-  font-family: var(--site-font-serif);
+  font-family: var(--site-font-head);
   font-size: 38px;
   font-weight: 900;
-  color: var(--p-rose-ink);
+  color: var(--p-green-ink);
 }
 
 .profile__text {
@@ -312,7 +312,7 @@ function entryStyle(i: number) {
 
 .profile__name {
   margin: 0 0 8px;
-  font-family: var(--site-font-serif);
+  font-family: var(--site-font-head);
   font-size: clamp(1.5rem, 3vw, 2rem);
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -342,10 +342,10 @@ function entryStyle(i: number) {
 }
 
 .stats__value {
-  font-family: var(--site-font-serif);
+  font-family: var(--site-font-head);
   font-size: 24px;
   font-weight: 900;
-  color: var(--p-rose-ink);
+  color: var(--p-green-ink);
   line-height: 1.1;
 }
 
@@ -360,7 +360,7 @@ function entryStyle(i: number) {
 .stats__sep {
   width: 1px;
   height: 30px;
-  background: rgba(201, 139, 146, 0.35);
+  background: rgba(162, 220, 207, 0.6);
 }
 
 .links {
@@ -376,9 +376,9 @@ function entryStyle(i: number) {
   height: 40px;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(201, 139, 146, 0.25);
+  border: 1px solid rgba(162, 220, 207, 0.5);
   color: var(--ink-2);
-  box-shadow: 0 1px 2px rgba(90, 60, 66, 0.06);
+  box-shadow: 0 1px 2px rgba(37, 90, 78, 0.06);
   transition: background-color 0.3s, color 0.3s, transform 0.3s, border-color 0.3s;
 }
 
@@ -388,9 +388,9 @@ function entryStyle(i: number) {
 }
 
 .links__btn:hover {
-  background: var(--p-rose);
-  border-color: var(--p-rose);
-  color: #fff;
+  background: var(--p-mint);
+  border-color: var(--p-mint);
+  color: var(--p-green-deep);
   transform: translateY(-2px);
 }
 
@@ -419,7 +419,7 @@ function entryStyle(i: number) {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, var(--entry-from, #c98b92), var(--entry-to, #a2dccf));
+  background: linear-gradient(135deg, var(--entry-from, #2e7d6b), var(--entry-to, #a2dccf));
 }
 
 .card--entry.has-cover::before {
@@ -480,7 +480,7 @@ function entryStyle(i: number) {
 }
 
 .entry__title {
-  font-family: var(--site-font-serif);
+  font-family: var(--site-font-head);
   font-size: 26px;
   font-weight: 700;
   color: var(--ink-1);
@@ -566,7 +566,7 @@ function entryStyle(i: number) {
   border-radius: 10px;
   background: rgba(214, 240, 239, 0.75);
   border: 1px solid rgba(162, 220, 207, 0.6);
-  box-shadow: 0 1px 2px rgba(90, 60, 66, 0.05);
+  box-shadow: 0 1px 2px rgba(37, 90, 78, 0.05);
   font-size: 11px;
   font-weight: 700;
   color: #2f6f66;

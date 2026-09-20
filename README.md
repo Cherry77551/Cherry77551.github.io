@@ -112,27 +112,31 @@ export const homeConfig = {
 
 ## 改配色
 
-整套色只有四种,定义在 `docs/.vitepress/theme/custom.css` 最上面:
+整套色只有四种,定义在 `docs/.vitepress/theme/custom.css` 最上面。**绿色是主基调,粉色只做点缀**:
 
 ```css
 :root {
-  --p-rose: #c98b92;   /* 玫粉   —— 描边、渐变、强调块 */
-  --p-pink: #f7c9d4;   /* 樱花粉 */
-  --p-mist: #d6f0ef;   /* 薄雾青 */
-  --p-mint: #a2dccf;   /* 薄荷绿 */
+  --p-mint: #a2dccf;   /* 薄荷绿   主基调 */
+  --p-mist: #d6f0ef;   /* 薄雾青   主基调 */
+  --p-pink: #f7c9d4;   /* 樱花粉   点缀(warning 提示块) */
+  --p-rose: #c98b92;   /* 玫粉     点缀(渐变、小面积强调) */
 }
 ```
 
-> 这四种色直接当文字色对比度不够,所以文字和链接用的是加深版的 `--p-rose-ink`(`#9a5a64`)。
-> 想换文字色就改它,别改 `--p-rose`。
+> 两个绿明度太高,直接当文字色对比度只有 1.5:1(不达 WCAG AA)。
+> 所以链接和文字用的是从薄荷加深出来的 `--p-green-ink`(`#2e7d6b`,对比度 5.1:1)。
+> **想换文字色就改它,别改 `--p-mint`。**
 
 ## 改字体
 
-默认正文是衬线体(宋体系)。想换成无衬线,改 `custom.css` 里这一行:
+全站用的是系统无衬线字体栈(苹方 / 微软雅黑 / system-ui),定义在 `custom.css` 里:
 
 ```css
---vp-font-family-base: var(--site-font-sans);
+--site-font-head: system-ui, -apple-system, "Segoe UI", "PingFang SC",
+  "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", sans-serif;
 ```
+
+想换字体改这一行就行 —— 顶栏、标题、导航都读它。
 
 ## 换背景
 
