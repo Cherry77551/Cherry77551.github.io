@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed } from 'vue'
 import { useData, withBase } from 'vitepress'
 import { homeConfig } from './home.config'
 import SiteBackground from './SiteBackground.vue'
@@ -15,25 +15,22 @@ const statusBar = homeConfig.statusBar
 
 const initial = computed(() => (profile.name || '?').trim().charAt(0))
 
-/* ---------------- 状态栏时钟 ---------------- */
-const now = ref('')
-let timer: number | undefined
+/* 没上传封面图时,用这四色轮着做渐变兜底 */
+const gradientPairs = [
+  ['#c98b92', '#a2dccf'],
+  ['#a2dccf', '#d6f0ef'],
+  ['#f7c9d4', '#c98b92'],
+  ['#d6f0ef', '#a2dccf'],
+  ['#c98b92', '#f7c9d4'],
+]
 
-function tick() {
-  const d = new Date()
-  const p = (n: number) => String(n).padStart(2, '0')
-  now.value = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+function entryStyle(i: number) {
+  const [from, to] = gradientPairs[i % gradientPairs.length]
+  return {
+    '--entry-from': from,
+    '--entry-to': to,
+  } as Record<string, string>
 }
-
-onMounted(() => {
-  if (!statusBar.clock) return
-  tick()
-  timer = window.setInterval(tick, 1000)
-})
-
-onBeforeUnmount(() => {
-  if (timer) window.clearInterval(timer)
-})
 </script>
 
 <template>
@@ -114,10 +111,11 @@ onBeforeUnmount(() => {
         <!-- ---------------- 入口大卡 ---------------- -->
         <div class="entries">
           <a
-            v-for="entry in entries"
+            v-for="(entry, i) in entries"
             :key="entry.link"
             class="card card--entry"
             :class="{ 'has-cover': !!entry.cover }"
+            :style="entryStyle(i)"
             :href="withBase(entry.link)"
           >
             <span
@@ -143,16 +141,12 @@ onBeforeUnmount(() => {
           </a>
         </div>
 
-        <!-- ---------------- 状态栏 ---------------- -->
+        <!-- ---------------- 底部状态栏(没有时钟) ---------------- -->
         <div class="card card--status">
-          <div v-if="statusBar.clock" class="clock">{{ now }}</div>
-
-          <div class="status__meta">
-            <span class="status__note">{{ statusBar.note }}</span>
-            <span class="status__badges">
-              <span v-for="b in statusBar.badges" :key="b" class="badge">{{ b }}</span>
-            </span>
-          </div>
+          <span class="status__note">{{ statusBar.note }}</span>
+          <span class="status__badges">
+            <span v-for="b in statusBar.badges" :key="b" class="badge">{{ b }}</span>
+          </span>
         </div>
       </div>
     </main>
@@ -172,11 +166,11 @@ onBeforeUnmount(() => {
   left: 0;
   right: 0;
   z-index: 50;
-  background: rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.45);
   backdrop-filter: blur(20px) saturate(160%);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.35);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  border-bottom: 1px solid rgba(201, 139, 146, 0.25);
+  box-shadow: 0 1px 2px rgba(90, 60, 66, 0.05);
 }
 
 .hdr__inner {
@@ -195,13 +189,13 @@ onBeforeUnmount(() => {
   font-size: 20px;
   font-weight: 900;
   letter-spacing: -0.02em;
-  color: #1e293b;
+  color: var(--ink-1);
   text-decoration: none;
   transition: color 0.3s;
 }
 
 .hdr__brand:hover {
-  color: #4f46e5;
+  color: var(--p-rose-ink);
 }
 
 .hdr__nav {
@@ -214,14 +208,14 @@ onBeforeUnmount(() => {
   font-family: var(--site-font-serif);
   font-size: 14px;
   font-weight: 700;
-  color: #334155;
+  color: var(--ink-2);
   text-decoration: none;
   transition: color 0.3s;
 }
 
 .hdr__nav a:hover,
 .hdr__nav a.is-active {
-  color: #4f46e5;
+  color: var(--p-rose-ink);
 }
 
 .hdr__nav a.is-active::after {
@@ -232,7 +226,7 @@ onBeforeUnmount(() => {
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: #6366f1;
+  background: var(--p-rose);
   transform: translateX(-50%);
 }
 
@@ -253,11 +247,11 @@ onBeforeUnmount(() => {
 /* ---------------- 玻璃卡片 ---------------- */
 .card {
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.5);
   backdrop-filter: blur(14px) saturate(150%);
   -webkit-backdrop-filter: blur(14px) saturate(150%);
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  box-shadow: 0 10px 30px -12px rgba(15, 23, 42, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 10px 30px -12px rgba(90, 60, 66, 0.22);
 }
 
 /* ---------------- 个人卡片 ---------------- */
@@ -286,8 +280,8 @@ onBeforeUnmount(() => {
   height: 92px;
   border-radius: 20px;
   padding: 3px;
-  background: linear-gradient(135deg, #6366f1, #a855f7);
-  box-shadow: 0 8px 20px -8px rgba(99, 102, 241, 0.6);
+  background: linear-gradient(135deg, #c98b92, #a2dccf);
+  box-shadow: 0 8px 20px -8px rgba(201, 139, 146, 0.65);
 }
 
 .profile__avatar img {
@@ -309,7 +303,7 @@ onBeforeUnmount(() => {
   font-family: var(--site-font-serif);
   font-size: 38px;
   font-weight: 900;
-  color: #4f46e5;
+  color: var(--p-rose-ink);
 }
 
 .profile__text {
@@ -323,14 +317,14 @@ onBeforeUnmount(() => {
   font-weight: 700;
   letter-spacing: 0.02em;
   line-height: 1.25;
-  color: #0f172a;
+  color: var(--ink-1);
 }
 
 .profile__bio {
   margin: 0;
   font-size: 14px;
   line-height: 1.75;
-  color: #475569;
+  color: var(--ink-2);
 }
 
 .stats {
@@ -351,7 +345,7 @@ onBeforeUnmount(() => {
   font-family: var(--site-font-serif);
   font-size: 24px;
   font-weight: 900;
-  color: #4f46e5;
+  color: var(--p-rose-ink);
   line-height: 1.1;
 }
 
@@ -360,13 +354,13 @@ onBeforeUnmount(() => {
   font-style: normal;
   font-weight: 700;
   letter-spacing: 0.14em;
-  color: #64748b;
+  color: var(--ink-3);
 }
 
 .stats__sep {
   width: 1px;
   height: 30px;
-  background: rgba(100, 116, 139, 0.28);
+  background: rgba(201, 139, 146, 0.35);
 }
 
 .links {
@@ -381,11 +375,11 @@ onBeforeUnmount(() => {
   width: 40px;
   height: 40px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  color: #475569;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
-  transition: background-color 0.3s, color 0.3s, transform 0.3s;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(201, 139, 146, 0.25);
+  color: var(--ink-2);
+  box-shadow: 0 1px 2px rgba(90, 60, 66, 0.06);
+  transition: background-color 0.3s, color 0.3s, transform 0.3s, border-color 0.3s;
 }
 
 .links__btn svg {
@@ -394,7 +388,8 @@ onBeforeUnmount(() => {
 }
 
 .links__btn:hover {
-  background: #6366f1;
+  background: var(--p-rose);
+  border-color: var(--p-rose);
   color: #fff;
   transform: translateY(-2px);
 }
@@ -419,17 +414,15 @@ onBeforeUnmount(() => {
   transition: transform 0.5s cubic-bezier(0.33, 1, 0.68, 1), box-shadow 0.5s;
 }
 
-/* 没封面图时的渐变兜底 */
+/* 没封面图时的四色渐变兜底 */
 .card--entry::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, #818cf8, #c084fc);
-  opacity: 0.9;
+  background: linear-gradient(135deg, var(--entry-from, #c98b92), var(--entry-to, #a2dccf));
 }
 
 .card--entry.has-cover::before {
-  background: #1e293b;
   opacity: 0;
 }
 
@@ -441,15 +434,21 @@ onBeforeUnmount(() => {
   transition: transform 1s cubic-bezier(0.33, 1, 0.68, 1);
 }
 
+/* 深色蒙版,保证白字看得清 */
 .entry__scrim {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, rgba(15, 23, 42, 0.78), rgba(15, 23, 42, 0.12));
+  background: linear-gradient(to top, rgba(58, 38, 43, 0.8), rgba(58, 38, 43, 0.12));
+  opacity: 0;
+}
+
+.card--entry.has-cover .entry__scrim {
+  opacity: 1;
 }
 
 .card--entry:hover {
   transform: scale(1.02) translateY(-3px);
-  box-shadow: 0 18px 40px -14px rgba(79, 70, 229, 0.45);
+  box-shadow: 0 18px 40px -14px rgba(154, 90, 100, 0.5);
 }
 
 .card--entry:hover .entry__cover {
@@ -470,27 +469,27 @@ onBeforeUnmount(() => {
   margin-bottom: 6px;
   padding: 3px 10px;
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.55);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: #fff;
+  color: var(--ink-1);
 }
 
 .entry__title {
   font-family: var(--site-font-serif);
   font-size: 26px;
   font-weight: 700;
-  color: #fff;
+  color: var(--ink-1);
   line-height: 1.2;
 }
 
 .entry__desc {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--ink-2);
 }
 
 .entry__arrow {
@@ -503,11 +502,30 @@ onBeforeUnmount(() => {
   width: 38px;
   height: 38px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.5);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  color: #fff;
+  color: var(--ink-1);
   transition: transform 0.4s, background-color 0.4s;
+}
+
+/* 用了封面照片时,才切成白字 + 深色蒙版 */
+.card--entry.has-cover .entry__tag {
+  background: rgba(255, 255, 255, 0.28);
+  color: #fff;
+}
+
+.card--entry.has-cover .entry__title {
+  color: #fff;
+}
+
+.card--entry.has-cover .entry__desc {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.card--entry.has-cover .entry__arrow {
+  background: rgba(255, 255, 255, 0.24);
+  color: #fff;
 }
 
 .entry__arrow svg {
@@ -516,33 +534,13 @@ onBeforeUnmount(() => {
 }
 
 .card--entry:hover .entry__arrow {
-  background: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.42);
   transform: translateX(4px);
 }
 
-/* ---------------- 状态栏 ---------------- */
+/* ---------------- 底部状态栏 ---------------- */
 .card--status {
   grid-column: span 12;
-  display: flex;
-  align-items: stretch;
-  overflow: hidden;
-}
-
-.clock {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 18px 30px;
-  background: rgba(15, 23, 42, 0.88);
-  color: #fff;
-  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
-  font-size: 24px;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-}
-
-.status__meta {
-  flex: 1 1 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -552,9 +550,9 @@ onBeforeUnmount(() => {
 }
 
 .status__note {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
-  color: #475569;
+  color: var(--ink-2);
 }
 
 .status__badges {
@@ -564,14 +562,14 @@ onBeforeUnmount(() => {
 }
 
 .badge {
-  padding: 5px 11px;
+  padding: 5px 12px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  background: rgba(214, 240, 239, 0.75);
+  border: 1px solid rgba(162, 220, 207, 0.6);
+  box-shadow: 0 1px 2px rgba(90, 60, 66, 0.05);
   font-size: 11px;
   font-weight: 700;
-  color: #475569;
+  color: #2f6f66;
 }
 
 /* ---------------- 响应式 ---------------- */
@@ -645,12 +643,7 @@ onBeforeUnmount(() => {
   }
 
   .card--status {
-    flex-direction: column;
-  }
-
-  .clock {
-    font-size: 20px;
-    padding: 12px 20px;
+    padding: 14px 18px;
   }
 }
 

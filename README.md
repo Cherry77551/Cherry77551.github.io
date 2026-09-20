@@ -56,7 +56,7 @@ docs/
 │  └─ theme/
 │     ├─ index.ts          # 主题入口
 │     ├─ Layout.vue        # 包一层,给所有页面加背景层
-│     ├─ SiteBackground.vue # 全屏背景:照片轮播 + 磨砂 + 靛紫渐变
+│     ├─ SiteBackground.vue # 全屏背景:照片轮播 + 磨砂 + 四色渐变
 │     ├─ SplitHome.vue     # 首页仪表盘
 │     ├─ home.config.ts    # ★ 首页内容配置(改这里就够了)
 │     └─ custom.css        # 玻璃拟态 + 配色(改主色看这里)
@@ -108,37 +108,46 @@ export const homeConfig = {
 **压缩很重要**:照片压到 300KB 以内、背景图 500KB 以内再放进来,不然首页打开要等很久。
 在线压图工具搜「squoosh」就行。
 
-留空字符串 `''` 也没事 —— 会用内置的靛紫渐变兜底,不会出现破图。
+留空字符串 `''` 也没事 —— 会用内置的四色渐变兜底,不会出现破图。
 
 ## 改配色
 
-`docs/.vitepress/theme/custom.css` 最上面的变量:
+整套色只有四种,定义在 `docs/.vitepress/theme/custom.css` 最上面:
 
 ```css
 :root {
-  --brand: #4f46e5;          /* 链接、高亮 */
-  --brand-2: #6366f1;        /* 主按钮 */
-  --brand-3: #a855f7;        /* 渐变用的紫 */
-  --glass: rgba(255,255,255,0.45);   /* 玻璃卡片底色 */
-  --glass-blur: blur(16px) saturate(150%);
+  --p-rose: #c98b92;   /* 玫粉   —— 描边、渐变、强调块 */
+  --p-pink: #f7c9d4;   /* 樱花粉 */
+  --p-mist: #d6f0ef;   /* 薄雾青 */
+  --p-mint: #a2dccf;   /* 薄荷绿 */
 }
 ```
 
+> 这四种色直接当文字色对比度不够,所以文字和链接用的是加深版的 `--p-rose-ink`(`#9a5a64`)。
+> 想换文字色就改它,别改 `--p-rose`。
+
 ## 改字体
 
-默认正文是衬线体(宋体系),跟参考站一致。想换成无衬线,改 `custom.css` 里这一行:
+默认正文是衬线体(宋体系)。想换成无衬线,改 `custom.css` 里这一行:
 
 ```css
 --vp-font-family-base: var(--site-font-sans);
 ```
 
-## 换背景(免费)
+## 换背景
 
-背景照片和轮播都在 `docs/.vitepress/theme/home.config.ts` 的 `backgroundImages` 里改。
-磨砂强度、渐变遮罩在 `SiteBackground.vue` 里的一条对应样式,想调淡调浓改 `--site-bg-veil`
-那个数字(`SiteBackground.vue` 里的 `.site-bg__veil` 的 `background` 那行)。
+背景照片和轮播都在 `docs/.vitepress/theme/home.config.ts`:
 
-不放任何背景图也行,会显示内置的靛紫渐变。
+```ts
+backgroundImages: ['/img/bg-1.jpg', '/img/bg-2.jpg'],  // 放几张贴几张,自动轮播
+backgroundVeil: 0.24,   // 换了自己的照片记得调这个,否则文字看不清
+```
+
+- `backgroundVeil: 0` —— 用内置渐变背景时(默认),颜色最鲜艳
+- `backgroundVeil: 0.24` —— 换成自己照片后调到这里
+- `backgroundVeil: 0.4+` —— 照片很花的时候
+
+不放任何背景图也行(`backgroundImages: []`),会显示内置的四色渐变。
 
 
 ## 上线部署(只需要做一次)
@@ -194,7 +203,7 @@ cat ~/.ssh/id_ed25519.pub                  # 把输出粘到 GitHub → Settings
 - [x] 站点名称/昵称:现在是 `乌鸦张嘴`,在 `docs/.vitepress/config.mts` 的 `title` 和 `footer.copyright`,以及 `docs/about.md` 的自我介绍
 - [ ] **首页的头像、简介、统计数字、入口封面图** —— 全在 `docs/.vitepress/theme/home.config.ts`
 - [ ] **背景照片** —— 放 `docs/public/img/`,写进 `home.config.ts` 的 `backgroundImages`
-- [ ] `docs/public/favicon.svg` 想换的话直接替换文件(现在是靛紫渐变 + 一个「鸦」字)
+- [ ] `docs/public/favicon.svg` 想换的话直接替换文件(现在是玫粉→薄荷渐变 + 一个「鸦」字)
 - [ ] 想公开邮箱的话,加在 `docs/about.md` 的联系方式里
 
 ## 后面可以加的

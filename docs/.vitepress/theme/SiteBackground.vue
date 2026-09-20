@@ -3,6 +3,8 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { homeConfig } from './home.config'
 
 const images = computed(() => (homeConfig.backgroundImages || []).filter(Boolean))
+/** 0 = 不盖遮罩(内置渐变背景用);换成照片后调到 0.24 左右 */
+const veil = computed(() => Number(homeConfig.backgroundVeil ?? 0))
 const active = ref(0)
 let timer: number | undefined
 
@@ -30,8 +32,8 @@ onBeforeUnmount(() => {
       />
     </div>
 
-    <div class="site-bg__veil" />
-    <div class="site-bg__tint" />
+    <div class="site-bg__veil" :style="{ opacity: veil }" />
+    <div class="site-bg__tint" :style="{ opacity: veil > 0 ? 0.3 : 0 }" />
     <div class="site-bg__blob site-bg__blob--a" />
     <div class="site-bg__blob site-bg__blob--b" />
   </div>
@@ -66,22 +68,24 @@ onBeforeUnmount(() => {
   opacity: 1;
 }
 
-/* 照片上盖一层磨砂白,保证上面的卡片和文字看得清 */
+/* 照片上盖一层磨砂白,保证上面的卡片和文字看得清。
+   数值越小,背景的四色越明显 —— 0.20 左右比较平衡 */
 .site-bg__veil {
   position: absolute;
   inset: 0;
-  background: rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.24);
   backdrop-filter: blur(16px) saturate(150%);
   -webkit-backdrop-filter: blur(16px) saturate(150%);
 }
 
-/* 缓慢流动的靛紫渐变,以 color 模式叠上去给整站统一色调 */
+/* 缓慢流动的玫粉薄荷渐变,以 color 模式叠上去给整站统一色调。
+   用自己照片时靠它把色调拉齐;不需要就写 opacity: 0 */
 .site-bg__tint {
   position: absolute;
   inset: 0;
-  opacity: 0.55;
+  opacity: 0.3;
   mix-blend-mode: color;
-  background: linear-gradient(-45deg, #a18cd1, #fbc2eb, #a1c4fd, #c2e9fb);
+  background: linear-gradient(-45deg, #f7c9d4, #c98b92, #a2dccf, #d6f0ef);
   background-size: 400% 400%;
   animation: siteBgMove 15s ease infinite;
 }

@@ -1,15 +1,28 @@
 /**
- * 全站样式 —— 玻璃拟态 + 靛紫
+ * 全站样式 —— 玻璃拟态 + 玫粉薄荷配色
  * ----------------------------------------------------------------------------
  * 背景照片和渐变由 SiteBackground.vue 负责,这个文件只管「浮在上面的东西」。
  *
- * ▍想换主色
- *   下面 :root 里的 --brand / --brand-2 改掉就行。
- * ▍想换字体
- *   改 --site-font-serif(VitePress 正文用的是 --vp-font-family-base)。
+ * ▍四种配色
+ *   #C98B92  玫粉(主色:描边、渐变、强调块)
+ *   #F7C9D4  樱花粉
+ *   #D6F0EF  薄雾青
+ *   #A2DCCF  薄荷绿
+ *
+ *   注意:这四种色直接当文字色对比度不够,所以文字/链接用加深版的 --p-rose-ink。
  */
 
 :root {
+  /* ---------- 四种配色 ---------- */
+  --p-rose: #c98b92;
+  --p-pink: #f7c9d4;
+  --p-mist: #d6f0ef;
+  --p-mint: #a2dccf;
+
+  /* 主色加深版:给文字和链接用(白底对比度 5.2:1) */
+  --p-rose-ink: #9a5a64;
+  --p-rose-deep: #874c56;
+
   /* ---------- 字体 ---------- */
   --site-font-serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC",
     "STSong", Georgia, "Times New Roman", "SimSun", serif;
@@ -21,45 +34,39 @@
   --vp-font-family-mono: ui-monospace, "Cascadia Code", "JetBrains Mono",
     Consolas, "SF Mono", Menlo, monospace;
 
-  /* ---------- 主色(靛紫) ---------- */
-  --brand: #4f46e5;
-  --brand-2: #6366f1;
-  --brand-3: #a855f7;
-  --brand-soft: rgba(99, 102, 241, 0.16);
+  /* ---------- 文字(略带暖调的中性色) ---------- */
+  --ink-1: #3b3033;
+  --ink-2: #6a5c60;
+  --ink-3: #93858a;
 
   /* ---------- 玻璃材质 ---------- */
-  --glass: rgba(255, 255, 255, 0.45);
-  --glass-strong: rgba(255, 255, 255, 0.62);
-  --glass-border: rgba(255, 255, 255, 0.45);
+  --glass: rgba(255, 255, 255, 0.5);
+  --glass-strong: rgba(255, 255, 255, 0.68);
+  --glass-border: rgba(255, 255, 255, 0.55);
   --glass-blur: blur(16px) saturate(150%);
-  --glass-shadow: 0 10px 30px -12px rgba(15, 23, 42, 0.22);
+  --glass-shadow: 0 10px 30px -12px rgba(90, 60, 66, 0.22);
 
   --r-lg: 24px;
   --r-md: 16px;
   --r-pill: 9999px;
 
-  /* ---------- 文字 ---------- */
-  --ink-1: #0f172a;
-  --ink-2: #475569;
-  --ink-3: #64748b;
-
   /* ---------- 映射到 VitePress ---------- */
-  --vp-c-brand-1: var(--brand);
-  --vp-c-brand-2: #4338ca;
-  --vp-c-brand-3: var(--brand-2);
-  --vp-c-brand-soft: var(--brand-soft);
+  --vp-c-brand-1: var(--p-rose-ink);
+  --vp-c-brand-2: var(--p-rose-deep);
+  --vp-c-brand-3: var(--p-rose);
+  --vp-c-brand-soft: rgba(201, 139, 146, 0.2);
 
-  --vp-c-tip-1: var(--brand);
-  --vp-c-tip-2: #4338ca;
-  --vp-c-tip-3: var(--brand-2);
-  --vp-c-tip-soft: var(--brand-soft);
+  --vp-c-tip-1: var(--p-rose-ink);
+  --vp-c-tip-2: var(--p-rose-deep);
+  --vp-c-tip-3: var(--p-rose);
+  --vp-c-tip-soft: rgba(214, 240, 239, 0.6);
 
   --vp-c-bg: rgba(255, 255, 255, 0.4);
   --vp-c-bg-alt: rgba(255, 255, 255, 0.5);
   --vp-c-bg-soft: rgba(255, 255, 255, 0.55);
   --vp-c-bg-elv: rgba(255, 255, 255, 0.85);
-  --vp-c-divider: rgba(100, 116, 139, 0.28);
-  --vp-c-gutter: rgba(100, 116, 139, 0.2);
+  --vp-c-divider: rgba(201, 139, 146, 0.28);
+  --vp-c-gutter: rgba(201, 139, 146, 0.2);
 
   --vp-c-text-1: var(--ink-1);
   --vp-c-text-2: var(--ink-2);
@@ -69,20 +76,20 @@
   --vp-sidebar-bg-color: transparent;
 
   --vp-button-brand-border: transparent;
-  --vp-button-brand-text: #fff;
-  --vp-button-brand-bg: var(--brand-2);
+  --vp-button-brand-text: #ffffff;
+  --vp-button-brand-bg: var(--p-rose-ink);
   --vp-button-brand-hover-border: transparent;
-  --vp-button-brand-hover-text: #fff;
-  --vp-button-brand-hover-bg: var(--brand);
+  --vp-button-brand-hover-text: #ffffff;
+  --vp-button-brand-hover-bg: var(--p-rose-deep);
   --vp-button-brand-active-border: transparent;
-  --vp-button-brand-active-text: #fff;
-  --vp-button-brand-active-bg: #4338ca;
+  --vp-button-brand-active-text: #ffffff;
+  --vp-button-brand-active-bg: #7d444d;
 
   --vp-button-alt-border: 1px solid var(--glass-border);
-  --vp-button-alt-text: var(--ink-2);
+  --vp-button-alt-text: var(--p-rose-ink);
   --vp-button-alt-bg: var(--glass);
-  --vp-button-alt-hover-border: 1px solid rgba(255, 255, 255, 0.65);
-  --vp-button-alt-hover-text: var(--brand);
+  --vp-button-alt-hover-border: 1px solid rgba(201, 139, 146, 0.4);
+  --vp-button-alt-hover-text: var(--p-rose-deep);
   --vp-button-alt-hover-bg: var(--glass-strong);
 }
 
@@ -108,11 +115,11 @@ body {
    顶栏
    ============================================================ */
 .VPNav {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.35);
+  border-bottom: 1px solid rgba(201, 139, 146, 0.25);
 }
 
 .VPNavBar {
-  background-color: rgba(255, 255, 255, 0.42) !important;
+  background-color: rgba(255, 255, 255, 0.45) !important;
   backdrop-filter: blur(20px) saturate(160%);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
   border-bottom: none !important;
@@ -140,25 +147,24 @@ body {
 
 .VPNavBarMenuLink:hover,
 .VPNavBarMenuLink.active {
-  color: var(--brand);
+  color: var(--p-rose-ink);
 }
 
-/* 深色模式开关(当前没开深色模式) */
 .VPSwitchAppearance {
   display: none !important;
 }
 
 .VPNavScreen,
 .VPNavScreenMenuLink {
-  background-color: rgba(255, 255, 255, 0.9);
+  background-color: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(20px);
 }
 
 .VPLocalNav {
-  background-color: rgba(255, 255, 255, 0.5) !important;
+  background-color: rgba(255, 255, 255, 0.55) !important;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.4) !important;
+  border-bottom: 1px solid rgba(201, 139, 146, 0.25) !important;
 }
 
 .VPLocalNav .menu,
@@ -171,10 +177,10 @@ body {
    左侧目录
    ============================================================ */
 .VPSidebar {
-  background-color: rgba(255, 255, 255, 0.4) !important;
+  background-color: rgba(255, 255, 255, 0.42) !important;
   backdrop-filter: blur(18px) saturate(150%);
   -webkit-backdrop-filter: blur(18px) saturate(150%);
-  border-right: 1px solid rgba(255, 255, 255, 0.4);
+  border-right: 1px solid rgba(201, 139, 146, 0.22);
 }
 
 .VPSidebarItem .link {
@@ -186,16 +192,16 @@ body {
 }
 
 .VPSidebarItem .link:hover {
-  background-color: rgba(255, 255, 255, 0.6);
-  color: var(--brand);
+  background-color: rgba(247, 201, 212, 0.45);
+  color: var(--p-rose-ink);
 }
 
 .VPSidebarItem.is-active > .item > .link {
-  background-color: rgba(255, 255, 255, 0.72);
+  background-color: rgba(247, 201, 212, 0.65);
 }
 
 .VPSidebarItem.is-active > .item > .link > .text {
-  color: var(--brand);
+  color: var(--p-rose-ink);
   font-weight: 700;
 }
 
@@ -230,32 +236,32 @@ body {
 }
 
 .vp-doc a {
-  color: var(--brand);
+  color: var(--p-rose-ink);
   font-weight: 500;
   text-decoration: none;
-  border-bottom: 1px solid rgba(99, 102, 241, 0.4);
+  border-bottom: 1px solid rgba(201, 139, 146, 0.45);
   transition: border-color 0.25s, background-color 0.25s;
 }
 
 .vp-doc a:hover {
-  background-color: rgba(99, 102, 241, 0.1);
-  border-bottom-color: var(--brand);
+  background-color: rgba(247, 201, 212, 0.4);
+  border-bottom-color: var(--p-rose-ink);
 }
 
 /* 行内代码 */
 .vp-doc :not(pre) > code {
   border-radius: 8px;
-  background-color: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  color: #4338ca;
+  background-color: rgba(214, 240, 239, 0.75);
+  border: 1px solid rgba(162, 220, 207, 0.5);
+  color: #2f6f66;
   font-weight: 500;
 }
 
 /* 代码块 */
 .vp-doc div[class*='language-'] {
   border-radius: var(--r-lg);
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  background-color: rgba(255, 255, 255, 0.72) !important;
+  border: 1px solid rgba(162, 220, 207, 0.45);
+  background-color: rgba(255, 255, 255, 0.74) !important;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   box-shadow: var(--glass-shadow);
@@ -272,7 +278,7 @@ body {
 
 .vp-doc div[class*='language-'] > button.copy {
   border-radius: var(--r-pill);
-  background-color: rgba(255, 255, 255, 0.7);
+  background-color: rgba(214, 240, 239, 0.8);
 }
 
 /* 表格 */
@@ -281,14 +287,14 @@ body {
   width: 100%;
   border-radius: var(--r-md);
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  background-color: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(201, 139, 146, 0.25);
+  background-color: rgba(255, 255, 255, 0.6);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
 
 .vp-doc th {
-  background-color: rgba(99, 102, 241, 0.14);
+  background-color: rgba(247, 201, 212, 0.5);
   font-family: var(--site-font-serif);
   font-weight: 700;
   color: var(--ink-1);
@@ -297,11 +303,11 @@ body {
 .vp-doc th,
 .vp-doc td {
   border: none;
-  border-bottom: 1px solid rgba(100, 116, 139, 0.2);
+  border-bottom: 1px solid rgba(201, 139, 146, 0.18);
 }
 
 .vp-doc tr:nth-child(2n) {
-  background-color: rgba(255, 255, 255, 0.35);
+  background-color: rgba(214, 240, 239, 0.35);
 }
 
 .vp-doc tr:last-child td {
@@ -311,8 +317,8 @@ body {
 /* 引用块 */
 .vp-doc blockquote {
   border-radius: var(--r-md);
-  border-left: 4px solid rgba(99, 102, 241, 0.5);
-  background-color: rgba(255, 255, 255, 0.5);
+  border-left: 4px solid rgba(201, 139, 146, 0.55);
+  background-color: rgba(255, 255, 255, 0.55);
 }
 
 /* 图片 */
@@ -320,10 +326,10 @@ body {
   border-radius: var(--r-md);
 }
 
-/* 提示块 */
+/* 提示块 —— 四种配色各占一档 */
 .custom-block {
   border-radius: var(--r-md);
-  border: 1px solid rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--glass-border);
   background-color: rgba(255, 255, 255, 0.6);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -332,24 +338,28 @@ body {
   line-height: 1.8;
 }
 
+/* tip:薄雾青 */
 .custom-block.tip {
-  background-color: rgba(224, 231, 255, 0.65);
-  border-color: rgba(165, 180, 252, 0.6);
+  background-color: rgba(214, 240, 239, 0.7);
+  border-color: rgba(162, 220, 207, 0.6);
 }
 
-.custom-block.warning {
-  background-color: rgba(254, 243, 199, 0.7);
-  border-color: rgba(252, 211, 77, 0.55);
-}
-
-.custom-block.danger {
-  background-color: rgba(254, 226, 226, 0.7);
-  border-color: rgba(252, 165, 165, 0.55);
-}
-
+/* info:薄荷绿 */
 .custom-block.info {
-  background-color: rgba(224, 242, 254, 0.65);
-  border-color: rgba(125, 211, 252, 0.55);
+  background-color: rgba(162, 220, 207, 0.35);
+  border-color: rgba(162, 220, 207, 0.65);
+}
+
+/* warning:樱花粉 */
+.custom-block.warning {
+  background-color: rgba(247, 201, 212, 0.55);
+  border-color: rgba(201, 139, 146, 0.45);
+}
+
+/* danger:玫粉加深 */
+.custom-block.danger {
+  background-color: rgba(201, 139, 146, 0.28);
+  border-color: rgba(201, 139, 146, 0.65);
 }
 
 .vp-doc .header-anchor {
@@ -377,12 +387,12 @@ body {
 
 .VPDocOutlineItem a:hover,
 .VPDocAsideOutline .outline-link.active {
-  color: var(--brand);
-  background-color: rgba(255, 255, 255, 0.6);
+  color: var(--p-rose-ink);
+  background-color: rgba(247, 201, 212, 0.45);
 }
 
 .VPDocAsideOutline .outline-marker {
-  background-color: var(--brand-2);
+  background-color: var(--p-rose);
 }
 
 /* ============================================================
@@ -396,7 +406,7 @@ body {
 
 .VPButton:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 24px -10px rgba(79, 70, 229, 0.55);
+  box-shadow: 0 10px 24px -10px rgba(154, 90, 100, 0.5);
 }
 
 /* ============================================================
@@ -404,15 +414,15 @@ body {
    ============================================================ */
 .VPDocFooter .pager-link {
   border-radius: var(--r-md);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  background-color: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(201, 139, 146, 0.22);
+  background-color: rgba(255, 255, 255, 0.5);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   transition: transform 0.3s, box-shadow 0.3s, background-color 0.3s;
 }
 
 .VPDocFooter .pager-link:hover {
-  background-color: rgba(255, 255, 255, 0.7);
+  background-color: rgba(247, 201, 212, 0.45);
   box-shadow: var(--glass-shadow);
   transform: translateY(-2px);
 }
@@ -423,14 +433,14 @@ body {
 
 .last-updated {
   border-radius: var(--r-pill);
-  background-color: rgba(255, 255, 255, 0.5);
+  background-color: rgba(214, 240, 239, 0.7);
   padding: 4px 14px;
   display: inline-block;
 }
 
 .VPFooter {
-  border-top: 1px solid rgba(255, 255, 255, 0.35) !important;
-  background-color: rgba(255, 255, 255, 0.4) !important;
+  border-top: 1px solid rgba(201, 139, 146, 0.22) !important;
+  background-color: rgba(255, 255, 255, 0.42) !important;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
@@ -440,8 +450,8 @@ body {
    ============================================================ */
 .DocSearch-Button {
   border-radius: var(--r-pill) !important;
-  background-color: rgba(255, 255, 255, 0.5) !important;
-  border: 1px solid rgba(255, 255, 255, 0.5) !important;
+  background-color: rgba(255, 255, 255, 0.55) !important;
+  border: 1px solid rgba(201, 139, 146, 0.22) !important;
 }
 
 ::-webkit-scrollbar {
@@ -450,12 +460,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: rgba(100, 116, 139, 0.35);
+  background-color: rgba(201, 139, 146, 0.4);
   border-radius: var(--r-pill);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(100, 116, 139, 0.55);
+  background-color: rgba(201, 139, 146, 0.65);
 }
 
 /* ============================================================

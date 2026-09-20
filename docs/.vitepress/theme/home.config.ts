@@ -36,11 +36,9 @@ export interface HomeEntry {
 
 /** 底部状态栏 */
 export interface HomeStatusBar {
-  /** 是否显示实时时钟 */
-  clock: boolean
   /** 技术徽章,不要就写 [] */
   badges: string[]
-  /** 最右边那句话 */
+  /** 左边那句话 */
   note: string
 }
 
@@ -52,6 +50,14 @@ export const homeConfig = {
    *   backgroundImages: ['/img/bg-1.jpg', '/img/bg-2.jpg', '/img/bg-3.jpg'],
    * ------------------------------------------------------------------ */
   backgroundImages: ['/bg.svg'],
+
+  /* ------------------------------------------------------------------
+   * 背景遮罩浓度(0 ~ 1)
+   *   0     —— 背景色最鲜艳,适合内置的渐变背景(默认)
+   *   0.24  —— 换成自己的照片后调到这个值,否则文字看不清
+   *   0.4+  —— 照片很花的时候
+   * ------------------------------------------------------------------ */
+  backgroundVeil: 0,
 
   /* ------------------------------------------------------------------
    * 左侧的个人卡片
@@ -98,7 +104,6 @@ export const homeConfig = {
    * 底部状态栏
    * ------------------------------------------------------------------ */
   statusBar: {
-    clock: true,
     badges: ['VitePress', 'GitHub Pages', 'Actions'],
     note: '本站由 GitHub Actions 自动部署',
   } as HomeStatusBar,
