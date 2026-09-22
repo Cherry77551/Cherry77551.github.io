@@ -62,7 +62,6 @@ export default defineConfig({
           text: 'Unity',
           collapsed: true,
           items: [
-            { text: '总览', link: '/notes/unity/' },
             { text: '编辑器与基本操作', link: '/notes/unity/editor' },
           ],
         },
