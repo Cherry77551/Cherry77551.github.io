@@ -47,7 +47,6 @@ export default defineConfig({
           text: 'C#(为 Unity 准备)',
           collapsed: true,
           items: [
-            { text: '总览与阅读顺序', link: '/notes/dotnet/' },
             { text: '1. 类型系统与值/引用类型', link: '/notes/dotnet/type-system' },
             { text: '2. 字符串、数组与集合', link: '/notes/dotnet/strings-collections' },
             { text: '3. 面向对象:类、接口与继承', link: '/notes/dotnet/oop' },
