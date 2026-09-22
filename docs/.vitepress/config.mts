@@ -58,6 +58,14 @@ export default defineConfig({
             { text: '8. 内存、GC 与性能', link: '/notes/dotnet/memory-performance' },
           ],
         },
+        {
+          text: 'Unity',
+          collapsed: true,
+          items: [
+            { text: '总览', link: '/notes/unity/' },
+            { text: '编辑器与基本操作', link: '/notes/unity/editor' },
+          ],
+        },
       ],
       '/projects/': [
         {

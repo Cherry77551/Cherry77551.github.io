@@ -23,6 +23,14 @@
 | 7 | [异步编程与并发](./dotnet/async.md) | `async`/`await` 原理、取消、协程与 `Awaitable` |
 | 8 | [内存、GC 与性能](./dotnet/memory-performance.md) | Unity 的 GC 模型、`IDisposable`、`Span<T>`、零分配 |
 
+### Unity
+
+接着上面那套 C# 往下走,这边学引擎。从[总览](./unity/index.md)开始。
+
+| 篇目 | 主要内容 |
+| --- | --- |
+| [Unity 编辑器与基本操作](./unity/editor.md) | 六个面板、场景视角、移动旋转缩放手柄、组件、父子关系、预制体、Play 模式、常用快捷键 |
+
 ---
 
 想加新分类的话,只要在 `docs/notes/` 下建个文件夹,然后在侧栏里加一行就行,
