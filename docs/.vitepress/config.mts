@@ -62,6 +62,7 @@ export default defineConfig({
           collapsed: true,
           items: [
             { text: '编辑器与基本操作', link: '/notes/unity/editor' },
+            { text: 'FBX 模型导入与使用', link: '/notes/unity/fbx' },
           ],
         },
       ],
